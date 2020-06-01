@@ -62,7 +62,7 @@ def plot_spectrogram(spectrogram: Tensor):
     plt.show()
     # TODO: add to save plot
 
-
+#TODO: plot with librosa because scale it is not correct
 def plot_melspectrogram(melspectrogram: Tensor):
     assert len(melspectrogram.size()) == 2, \
         "Dimensions of spectogram should be 2, found ".format(len(melspectrogram.size()))

@@ -27,7 +27,7 @@ def create_dataloader(root: str, url: str):
     librispeech_data = download_data(root, url)
     return torch.utils.data.DataLoader(librispeech_data)
 
-
+# TODO: explain that it can be run to download dataset
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--root', type=str, required=False, default='../../data',
