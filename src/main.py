@@ -1,5 +1,5 @@
 from data import librispeech, podcast
-from dataprocessing import utils
+from dataprocessing import utils, utils_librosa
 import matplotlib.pyplot as plt
 import torch
 
@@ -11,9 +11,9 @@ if __name__ == '__main__':
     #utils.plot_wave([waveform, utils.resample(waveform, sample_rate, 44100)], sample_rate)
 
     podcast = podcast.PODCAST(root="../data/Podcast", audio_folder="corpus", text_file="metadata_TCC.csv")
-    dataloader = torch.utils.data.DataLoader(podcast)
-    dataiter = iter(dataloader)
+    dataloader_podcast = torch.utils.data.DataLoader(podcast)
+    dataiter_podcast = iter(dataloader_podcast)
 
-    sample = dataiter.next()
-    print(sample)
+    waveform1, sample_rate1, text1, season_id1, episode_id1, utterance_id1 = dataiter_podcast.next()
+    utils_librosa.plot_wave([waveform1], sample_rate1)
 

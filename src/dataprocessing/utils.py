@@ -57,8 +57,6 @@ def plot_spectrogram(spectrogram: Tensor):
     assert len(spectrogram.size()) == 2, \
         "Dimensions of spectogram should be 2, found {}".format(len(spectrogram.size()))
     plt.imshow(spectrogram, origin='lower')
-    plt.xlabel("Time (1/100 s)")
-    plt.ylabel("Frequency (Hz)")
     plt.show()
     # TODO: add to save plot
 
