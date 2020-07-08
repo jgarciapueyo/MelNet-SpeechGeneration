@@ -1,3 +1,5 @@
+# TODO: add file header
+
 class HParams(dict):
     def _initialize_default_values(self):
         r"""

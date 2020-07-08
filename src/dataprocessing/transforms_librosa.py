@@ -1,21 +1,25 @@
+from typing import List
+
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 import numpy as np
-from src.utils.hparams import HParams
 import torch
 from torch import Tensor
 
+from src.utils.hparams import HParams
+
+# TODO: improve documentation in every function
 
 def resample(waveform: Tensor, orig_freq: int, new_freq: int) -> Tensor:
     r"""Wrapper around librosa.core.resample()."""
     return librosa.core.resample(waveform, orig_freq, new_freq)
 
 
-def wave_to_spectrogram(wave: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around librosa.stft()"""
+def wave_to_spectrogram(waveform: Tensor, hp: HParams) -> Tensor:
+    r"""Wrapper around librosa.stft()."""
     return torch.from_numpy(np.abs(
-        librosa.core.stft(y=wave.numpy(),
+        librosa.core.stft(y=waveform.numpy(),
                           n_fft=hp.n_fft,
                           hop_length=hp.hop_length,
                           win_length=hp.win_length)

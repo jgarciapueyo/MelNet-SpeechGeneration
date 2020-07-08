@@ -1,125 +1,295 @@
+"""
+This module contains transformations to work with audio in its different representations like
+audio waveform, linear spectrogram, mel spectrogram.
+"""
+from typing import List
+
 import matplotlib.pyplot as plt
-from src.utils.hparams import HParams
+from torch import Tensor
 import torchaudio
 from torchaudio import functional as F
-from torch import Tensor
+
+from src.utils.hparams import HParams
 
 
 # TODO: compare using torchaudio.transforms vs torchaudio.functional (F)
 
 
-def resample(waveform: Tensor, orig_freq: int, new_freq: int) -> Tensor:
-    r"""Wrapper around torchaudio.transforms.Resample()."""
+def resample(waveforms: Tensor, orig_freq: int, new_freq: int) -> Tensor:
+    r"""Wrapper around torchaudio.transforms.Resample().
+
+    Args:
+        waveform (Tensor): audio waveform. Shape: [B, 1, L] where L is the number of times the waveform
+            has been sampled and B is batch size.
+        orig_freq (int)
+        new_freq (int)
+
+    Returns:
+        waveform (Tensor): audio waveform: Shape: [B, 1, L'] where L' is the number of times the
+            waveform has been sampled (after resampling) and B is batch size.
+    """
+    assert len(waveforms.size()) == 3, \
+        "Dimensions of waveforms should be 3: [B, 1, L], but found {}".format(len(waveforms.size()))
+
     r = torchaudio.transforms.Resample(orig_freq, new_freq)
-    return r(waveform)
+    return r(waveforms)
 
 
-def wave_to_spectrogram(wave: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around torchaudio.transforms.Spectrogram()."""
+def wave_to_spectrogram(waveforms: Tensor, hp: HParams) -> Tensor:
+    r"""Wrapper around torchaudio.transforms.Spectrogram().
+
+    Args:
+        waveform (Tensor): audio waveform. Shape: [B, 1, L] where L is the number of times the waveform
+            has been sampled and B is batch size.
+        hp (HParams): parameters. Parameters needed are n_fft, win_length, hop_length and power.
+
+    Returns:
+        spectrogram (Tensor): spectrogram corresponding to waveform. Shape: [B, FREQ, FRAMES]
+            where B is batch size and FREQ and FRAMES depends on the parameters hp.
+            (See: https://pytorch.org/audio/transforms.html#spectrogram)
+    """
+    assert len(waveforms.size()) == 3, \
+        "Dimensions of waveforms should be 3: [B, 1, L], but found {}".format(len(waveforms.size()))
+
     spectrogram = torchaudio.transforms.Spectrogram(n_fft=hp.n_fft,
                                                     win_length=hp.win_length,
                                                     hop_length=hp.hop_length,
                                                     power=hp.power)
-    return spectrogram(wave)
+    return spectrogram(waveforms).squeeze(dim=1)
 
 
 def spectrogram_to_wave(spectrogram: Tensor, hp: HParams, n_iter: int = 32) -> Tensor:
-    r"""Wrapper around torchaudio.transforms.GriffinLim()."""
+    r"""Wrapper around torchaudio.transforms.GriffinLim().
+
+    Args:
+        spectrogram (Tensor): spectrogram. Shape: [B, FREQ, FRAMES] where B is batch size.
+        hp (HParams): parameters. Parameters needed are n_fft, win_length, hop_length and power.
+        n_iter (int): number of iteration for phase recovery process.
+
+    Returns:
+        waveform (Tensor): audio waveform. Shape: [B, 1, L] L is the number of times the waveform
+            has been sampled and B is batch size.
+    """
+    assert len(spectrogram.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES], but found {}".format(
+            len(spectrogram.size()))
+
     griffinlim = torchaudio.transforms.GriffinLim(n_fft=hp.n_fft,
                                                   n_iter=n_iter,
                                                   win_length=hp.win_length,
                                                   hop_length=hp.hop_length,
                                                   power=hp.power)
-    return griffinlim(spectrogram)
+    return griffinlim(spectrogram).unsqueeze(dim=1)
 
 
 def spectrogram_to_melspectrogram(spectrogram: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around torchaudio.trnaforms.MelScale()"""
-    # TODO: check if power spectrogram or magnitude (energy) spectrogram and modify it accordingly
-    #  since melscale should be applied to power spectrogram
+    r"""Wrapper around torchaudio.trnaforms.MelScale()
+
+    Args:
+        spectrogram (Tensor): spectrogram. Shape: [B, FREQ, FRAMES] where B is batch size.
+        hp (HParams): parameters. Parameters needed are mel_channels and sample_rate.
+
+    Returns:
+        melspectrogram (Tensor): melspectrogram. Shape: [B, N_MELS, FRAMES] where B is batch size
+            and N_MELS is the number of mel_channels.
+    """
+    assert len(spectrogram.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES], but found {}".format(
+            len(spectrogram.size()))
+
+    # FIXME: should MelScale only be applied to power spectrogram (and not to a linear one)?
+    #  Ask for an answer
     melscale = torchaudio.transforms.MelScale(n_mels=hp.mel_channels,
                                               sample_rate=hp.sample_rate)
     return melscale(spectrogram)
 
 
-def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around torchaudio.transforms.InverseMelScale()."""
+def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams, n_iter: int = 100000) -> Tensor:
+    r"""Wrapper around torchaudio.transforms.InverseMelScale().
+
+    Args:
+        melspectrogram (Tensor): melspectrogram. Shape: [B, N_MELS, FRAMES] where B is batch size
+            and N_MELS is the number of mel_channels.
+        hp (HParams): parameters. Parameters needed are n_fft, mel_channels and sample_rate.
+        n_iter (int): number of optimization iterations.
+
+    Returns:
+        spectrogram (Tensor): linear spectrogram. Shape: [B, FREQ, FRAMES] where B is batch size.
+    """
+    assert len(melspectrogram.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, N_MELS, FRAMES], but found {}".format(
+            len(melspectrogram.size()))
+
     # n_stft = nº bins in spectrogram depending on n_fft, exactly n_fft // 2 + 1
     inversemelscale = torchaudio.transforms.InverseMelScale(n_stft=hp.n_fft // 2 + 1,
                                                             n_mels=hp.mel_channels,
-                                                            sample_rate=hp.sample_rate)
+                                                            sample_rate=hp.sample_rate,
+                                                            max_iter=n_iter)
     return inversemelscale(melspectrogram)
 
 
-def wave_to_melspectrogram(wave: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around torchaudio.transforms.MelSpectrogram()."""
+def wave_to_melspectrogram(waveform: Tensor, hp: HParams) -> Tensor:
+    r"""Wrapper around torchaudio.transforms.MelSpectrogram().
+
+    Args:
+        waveform (Tensor): audio waveform. Shape: [B, 1, L] where B is batch size
+        hp (HParams): parameters. Parameters needed are sample_rate, n_fft, win_length, hop_length
+            and mel_channels.
+
+    Returns:
+        melspectrogram (Tensor): melspectrogram. Shape: [B, N_MELS, FRAMES] where B is batch size.
+    """
+    assert len(waveform.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, 1, L], but found {}".format(
+            len(waveform.size()))
+
     melsprectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sample_rate,
                                                            n_fft=hp.n_fft,
                                                            win_length=hp.win_length,
                                                            hop_length=hp.hop_length,
                                                            n_mels=hp.mel_channels)
-    return melsprectrogram(wave)
+    return melsprectrogram(waveform).squeeze(dim=1)
 
 
 def melspectrogram_to_wave(melspectrogram: Tensor, hp: HParams, n_iter: int = 32) -> Tensor:
     r"""
-    Composition of:
-        transforms.melspectrogram_to_spectrogram() and transforms.spectrogram_to_wave().
+    Composition of transforms.melspectrogram_to_spectrogram() and transforms.spectrogram_to_wave().
+
+    Args:
+        melspectrogram (Tensor): melspectrogram. Shape: [B, N_MELS, FRAMES] where B is batch size.
+        hp (HParams): parameters.
+        n_iter (int): number of iteration for phase recovery process.
+
+    Returns:
+        waveform (Tensor): audio waveform. Shape: [B, 1, L] where B is batch size.
     """
+    assert len(melspectrogram.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, N_MELS, FRAMES], but found {}".format(
+            len(melspectrogram.size()))
+
     spectrogram = melspectrogram_to_spectrogram(melspectrogram, hp)
-    wave = spectrogram_to_wave(spectrogram, hp, n_iter)
-    return wave
+    waveform = spectrogram_to_wave(spectrogram, hp, n_iter)
+    return waveform
 
 
 def amplitude_to_db(spectrogram: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around torchaudio.transforms.AmplitudeToDB()."""
+    r"""Wrapper around torchaudio.transforms.AmplitudeToDB().
+
+    Args:
+        spectrogram (Tensor): spectrogram in the power/amplitude scale.
+            Shape: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES] if it is a melspectrogram.
+        hp (HParams): parameters. Parameters needed are power.
+
+    Returns:
+        spectrogram (Tensor): spectrogram in decibel scale.
+            Shape: Shape: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES] if it is a melspectrogram.
+    """
+    assert len(spectrogram.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES], " \
+        "but found {}".format(len(spectrogram.size()))
+
     stype = 'power' if hp.power == 2 else 'magnitude'
     amplitudetodb = torchaudio.transforms.AmplitudeToDB(stype=stype)
     return amplitudetodb(spectrogram)
 
 
 def db_to_amplitude(spectrogram: Tensor, hp: HParams) -> Tensor:
-    r"""Wrapper around torchaudio.functional.DB_to_amplitude()."""
+    r"""Wrapper around torchaudio.functional.DB_to_amplitude().
+
+    Args:
+        spectrogram (Tensor): spectrogram in the decibel scale.
+            Shape: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES] if it is a melspectrogram.
+        hp (HParams): parameters. Parameters needed are power.
+
+    Returns:
+        spectrogram (Tensor): spectrogram in power/amplitude scale.
+            Shape: Shape: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES] if it is a melspectrogram.
+    """
+    assert len(spectrogram.size()) == 3, \
+        "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES], " \
+        "but found {}".format(len(spectrogram.size()))
+
     # power_exp calculated according to torchaudio.functional.DB_to_amplitude docs
     power_exp = 1 if hp.power == 2 else 0.5
     return F.DB_to_amplitude(spectrogram, ref=1, power=power_exp)
 
 
-def plot_wave(waveforms: [Tensor], hp: HParams):
-    r"""Plots the amplitude waveforms."""
+def plot_wave(waveforms: Tensor, hp: HParams) -> None:
+    r"""Plots the amplitude waveforms.
+
+    Args:
+        waveforms (Tensor): list of audio waveforms. Shape: [B, 1, L] where L is the number
+            of times the waveform has been sampled and B is batch size.
+        hp (HParams): parameters. Parameters needed are sample_rate.
+    """
+    assert len(waveforms.size()) == 3, \
+        "Dimensions of waveforms should be 3, found {}".format(len(waveforms.size()))
+
     for idx, waveform in enumerate(waveforms):
         print("Waveform {}, shape: {}".format(idx, waveform.size()))
         print("Waveform {}, Sample rate: {}".format(idx, hp.sample_rate))
 
-    plt.figure()
-    for waveform in waveforms:
-        plt.plot(waveform.flatten(), alpha=0.8)
-
-    plt.xlabel("Time (samples)")
-    plt.ylabel("Amplitude")
+    n_waveforms = waveforms.shape[0]
+    fig = plt.figure()
+    for i in range(0, n_waveforms):
+        fig.add_subplot(n_waveforms, 1, i + 1)
+        plt.plot(waveforms[i].flatten(), alpha=0.8)
+        plt.xlabel("Time (samples)")
+        plt.ylabel("Amplitude")
     plt.show()
 
 
-def plot_spectrogram(spectrogram: Tensor, hp: HParams):
-    r"""Plots spectrogram without information in x-axis and y-axis"""
-    # TODO: check if this function should be removed or changed to correctly display y-axis and x-axis
-    assert len(spectrogram.size()) == 2, \
-        "Dimensions of spectogram should be 2, found {}".format(len(spectrogram.size()))
-    plt.imshow(spectrogram, origin='lower')
-    plt.axis('off')
+def plot_spectrogram(spectrogram: Tensor, hp: HParams) -> None:
+    r"""Plots spectrogram without information in x-axis and y-axis.
+
+    Args:
+        spectrogram (Tensor): spectrogram. Shape: [B, FREQ, FRAMES].
+        hp (HParams): parameters.
+
+    .. Note:
+        This function plots the spectrogram without axis values.
+    """
+    assert len(spectrogram.size()) == 3, \
+        "Dimensions of spectogram should be 3, found {}".format(len(spectrogram.size()))
+
+    n_spectrograms = spectrogram.shape[0]
+    fig = plt.figure()
+    for i in range(0, n_spectrograms):
+        fig.add_subplot(n_spectrograms, 1, i + 1)
+        plt.imshow(spectrogram[i], origin='lower')
+        plt.axis('off')
     plt.show()
 
 
-def plot_melspectrogram(melspectrogram: Tensor, hp: HParams):
-    r"""Plots melspectrogram without information in x-axis and y-axis"""
-    # TODO: check if this function should be removed or changed to correctly display y-axis and x-axis
-    assert len(melspectrogram.size()) == 2, \
-        "Dimensions of spectogram should be 2, found ".format(len(melspectrogram.size()))
-    plt.imshow(melspectrogram, origin='lower')
-    plt.axis('off')
+def plot_melspectrogram(melspectrogram: Tensor, hp: HParams) -> None:
+    r"""Plots melspectrogram without information in x-axis and y-axis.
+
+    Args:
+        melspectrogram (Tensor): melspectrogram. Shape: [B, N_MELS, FRAMES].
+        hp (HParams): parameters.
+
+    .. Note:
+        This function plots the melspectrogram without axis values.
+    """
+    assert len(melspectrogram.size()) == 3, \
+        "Dimensions of melspectogram should be 3, found {}".format(len(melspectrogram.size()))
+
+    n_melspectrograms = melspectrogram.shape[0]
+    fig = plt.figure()
+    for i in range(0, n_melspectrograms):
+        fig.add_subplot(n_melspectrograms, 1, i + 1)
+        plt.imshow(melspectrogram[i], origin='lower')
+        plt.axis('off')
     plt.show()
 
 
-def save_wave(filepath: str, wave: Tensor, hp: HParams):
-    r"""Wrapper around torchaudio.save()."""
-    return torchaudio.save(filepath, wave, hp.sample_rate)
+def save_wave(filepath: str, waveform: Tensor, hp: HParams) -> None:
+    r"""Wrapper around torchaudio.save().
+
+    Args:
+        filepath (str): path where the audio will be saved.
+        waveform (Tensor): audio waveform to be saved. Shape: [1, L] where L is the number
+            of times the waveform has been sampled.
+        hp (HParams): parameters. Parameters needed are sample_rate.
+    """
+    torchaudio.save(filepath, waveform, hp.sample_rate)

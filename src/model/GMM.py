@@ -5,10 +5,10 @@ Representation of Gaussian Mixture Model probability distribution.
 These functions allow to sample from and maximum-likelihood estimation of the parameters of a GMM
 distribution.
 
-References:
-    - https://github.com/CPJKU/madmom/blob/master/madmom/ml/gmm.py
-    - https://gist.github.com/lirnli/a10629fd068384d114c301db18e729c8
-    - https://www.cs.bgu.ac.il/~cv201/wiki.files/logsumexp_trick.pdf
+Reference:
+    * https://github.com/CPJKU/madmom/blob/master/madmom/ml/gmm.py
+    * https://gist.github.com/lirnli/a10629fd068384d114c301db18e729c8
+    * https://www.cs.bgu.ac.il/~cv201/wiki.files/logsumexp_trick.pdf
 """
 import torch
 from torch import Tensor
@@ -19,7 +19,10 @@ def constraint_mu(mu: Tensor) -> Tensor:
     Constraint according to MelNet formula (3).
 
     Args:
-        mu (Tensor), shape (i*j, K): tensor representing the mean of the distribution.
+        mu (Tensor): tensor representing the mean of the distribution. Shape: [i*j, K]
+
+    Returns:
+        mu_constrained (Tensor): Shape: [i*j, K]
     """
     return mu
 
@@ -29,7 +32,10 @@ def constraint_std(std: Tensor) -> Tensor:
     Constraint according to MelNet formula (4).
 
     Args:
-        std (Tensor), shape (i*j, K): tensor representing the standard deviation of the distribution.
+        std (Tensor): tensor representing the standard deviation of the distribution. Shape: [i*j, K]:
+
+    Returns:
+        std_constrained (Tensor): Shape: [i*j, K]
     """
     return torch.exp(std)
 
@@ -39,33 +45,36 @@ def constraint_pi(pi: Tensor) -> Tensor:
     Constraint according to MelNet formula (5).
 
     Args:
-        pi (Tensor), shape (i*j, K): tensor representing the mixture coefficients of the distribution.
+        pi (Tensor): tensor representing the mixture coefficients of the distribution. Shape: [i*j, K]
+
+    Returns:
+        pi_constrained (Tensor): Shape: [i*j, K]
     """
-    return torch.softmax(pi, 1) # softmax accross columns
+    return torch.softmax(pi, 1)  # softmax accross columns
 
 
 def sample_gmm(mu: Tensor, std: Tensor, pi: Tensor) -> Tensor:
     r"""
-    Sample from i*j GMM distributions defined by \mu, \std and \pi, one GMM distribution for every x.
+    Sample from i*j GMM distributions defined by \mu, \std and \pi, one GMM distribution for every x_{ij}.
 
-    Note:
+    .. Note:
         theta_{ij} = {mu_{ij}, std_{ij}, pi_{ij}} parameterizes a univariate density over x_{ij}
         modelled by a Gaussian Mixture Model with k components.
 
-    Arguments:
-        mu (Tensor), shape (i, j, K) or (i*j, K): means of GMM with k components for every x
-        std (Tensor), shape (i, j, K) or (i*j, K): std of GMM with k components for every x
-        pi (Tensor), shape (i, j, K) or (i*j, K): pi of GMM with k components for every x
+    Args:
+        mu (Tensor): means of GMM with k components for every x_{ij}. Shape: [i, j, K] or [i*j, K]
+        std (Tensor): std of GMM with k components for every x_{ij}. Shape: [i, j, K] or [i*j, K]
+        pi (Tensor): pi of GMM with k components for every x_{ij}. Shape: [i, j, K] or [i*j, K]
 
     Returns:
-        shape (i*j, 1): One sample for every GMM corresponding to every x
+        samples (Tensor): One sample for every GMM corresponding to every x_{ij}. Shape: [i*j, 1]
     """
     # enforce constraints on parameters mu, std, pi according to (3), (4), (5)
-    mu = mu.reshape(-1, mu.shape[-1])
+    mu = mu.reshape(-1, mu.shape[-1])  # transform mu from [i, j, K] or [i*j, K] to [i*j, K]
     mu = constraint_mu(mu)
-    std = std.reshape(-1, std.shape[-1])
+    std = std.reshape(-1, std.shape[-1])  # transform std from [i, j, K] or [i*j, K] to [i*j, K]
     std = constraint_std(std)
-    pi = pi.reshape(-1, pi.shape[-1])
+    pi = pi.reshape(-1, pi.shape[-1])  # transform pi from [i, j, K] or [i*j, K] to [i*j, K]
     pi = constraint_pi(pi)
 
     # choose component to sample for every x
@@ -80,37 +89,43 @@ def sample_gmm(mu: Tensor, std: Tensor, pi: Tensor) -> Tensor:
     return generated
 
 
-def loss_gmm(mu: Tensor, std: Tensor, pi: Tensor, x: Tensor) -> Tensor:
+def loss_gmm(mu: Tensor, std: Tensor, pi: Tensor, data: Tensor) -> Tensor:
     r"""
-    Loss from i*j GMM distributions defined by \mu, \std and \pi, one GMM distribution for every x
+    Loss from i*j GMM distributions defined by \mu, \std and \pi, one GMM distribution for every x_{ij},
     with respect to \data.
 
-    Note:
+    .. Note:
         theta_{ij} = {mu_{ij}, std_{ij}, pi_{ij}} parameterizes a univariate density over x_{ij}
         modelled by a Gaussian Mixture Model with k components.
 
-    Arguments:
-        mu (Tensor), shape (i, j, K) or (i*j, K): means of GMM with k components for every x
-        std (Tensor), shape (i, j, K) or (i*j, K): std of GMM with k components for every x
-        pi (Tensor), shape (i, j, K) or (i*j, K): pi of GMM with k components for every x
-        x (Tensor), shape (i, j) or (i*j): real data to calculate the loss
+    Args:
+        mu (Tensor): means of GMM with k components for every x_{ij}. Shape: [i, j, K] or [i*j, K]
+        std (Tensor): std of GMM with k components for every x_{ij}. Shape: [i, j, K] or [i*j, K]
+        pi (Tensor): pi of GMM with k components for every x_{ij}. Shape: [i, j, K] or [i*j, K]
+        data (Tensor): real data to calculate the loss. Shape: shape [i, j] or [i*j]
 
     Returns:
-        shape (1): Loss of every x_{ij} with respect to the theta_{ij} GMM distribution
+        total_loss: sum of the individual loss of every x_{ij}, parameterized by theta_{ij} GMM
+                    distribution, with respect to data_{ij}. Shape: [] (0 dimension)
     """
     # enforce constraints on parameters mu, std, pi according to (3), (4), (5)
-    mu = mu.reshape(-1, mu.shape[-1])
+    mu = mu.reshape(-1, mu.shape[-1])  # transform mu from [i, j, K] or [i*j, K] to [i*j, K]
     mu = constraint_mu(mu)
-    std = std.reshape(-1, std.shape[-1])
+    std = std.reshape(-1, std.shape[-1])  # transform std from [i, j, K] or [i*j, K] to [i*j, K]
     std = constraint_std(std)
-    pi = pi.reshape(-1, pi.shape[-1])
+    pi = pi.reshape(-1, pi.shape[-1])  # transform pi from [i, j, K] or [i*j, K] to [i*j, K]
     pi = constraint_pi(pi)
 
     # modify data to fit the number of components of the GMM
-    x = x.expand(mu.size())
+    data = data.reshape(-1, 1)  # transform data from [i, j] or [i*j] to [i*j, 1]
+    data = data.expand(mu.shape)  # transform data from [i*j, 1] to [i*j, K] duplicating columns
 
-    # use Log Sum Exp trick to calculate the loss
+    # use Log Sum Exp trick to calculate the loss (negative log-likelihood)
     log_pi = torch.log(pi)
-    log_pdf = torch.distributions.normal.Normal(mu, std).log_prob(x)
-    loss = torch.logsumexp(log_pi + log_pdf, dim=1, keepdim=True)
-    return loss.mean()
+    log_pdf = torch.distributions.normal.Normal(mu, std).log_prob(data)
+
+    # this vector [i*j, 1] represents the individual loss of every pixel with respect to data
+    loss = -torch.logsumexp(log_pi + log_pdf, dim=1, keepdim=True)
+
+    # return the total loss of all the pixels
+    return loss.sum()
