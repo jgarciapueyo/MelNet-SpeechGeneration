@@ -69,7 +69,7 @@ def sample_gmm(mu: Tensor, std: Tensor, pi: Tensor) -> Tensor:
     Returns:
         samples (Tensor): One sample for every GMM corresponding to every x_{ij}. Shape: [i*j, 1]
     """
-    # enforce constraints on parameters mu, std, pi according to (3), (4), (5)
+    # enforce constraints on parameters mu, std, pi according to MelNet formula (3), (4), (5)
     mu = mu.reshape(-1, mu.shape[-1])  # transform mu from [i, j, K] or [i*j, K] to [i*j, K]
     mu = constraint_mu(mu)
     std = std.reshape(-1, std.shape[-1])  # transform std from [i, j, K] or [i*j, K] to [i*j, K]
@@ -108,7 +108,7 @@ def loss_gmm(mu: Tensor, std: Tensor, pi: Tensor, data: Tensor) -> Tensor:
         total_loss: sum of the individual loss of every x_{ij}, parameterized by theta_{ij} GMM
                     distribution, with respect to data_{ij}. Shape: [] (0 dimension)
     """
-    # enforce constraints on parameters mu, std, pi according to (3), (4), (5)
+    # enforce constraints on parameters mu, std, pi according to MelNet formula (3), (4), (5)
     mu = mu.reshape(-1, mu.shape[-1])  # transform mu from [i, j, K] or [i*j, K] to [i*j, K]
     mu = constraint_mu(mu)
     std = std.reshape(-1, std.shape[-1])  # transform std from [i, j, K] or [i*j, K] to [i*j, K]
