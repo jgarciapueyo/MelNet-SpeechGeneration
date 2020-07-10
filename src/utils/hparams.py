@@ -17,7 +17,7 @@ class HParams(dict):
 
     def __init__(self, sample_rate: int, init: dict = None, default_number: int = 256):
         r"""
-        Represents the parameters of the model regarding the audio representations.
+        Parameters of the model regarding the audio representations.
 
         It will contain the values of:
             power: type of spectrogram it will represent: 1 for energy, 2 for power
