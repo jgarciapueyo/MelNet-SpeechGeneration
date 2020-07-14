@@ -4,10 +4,32 @@ Delayed Stack
 Implementation of the layers that compose the Delayed Stack as explained in Section 4 of the MelNet
 paper.
 
-For more information, see: notebooks/06_DelayedStackDimensions.ipynb
+A Delayed Stack Layer is composed of three stacks:
+- Time-delayed stack: composed of three RNN (forward in time, forward in frequency and backward in
+                      frequency)
+- Frequency-delayed stack: composed of one RNN (forward in frequency)
+- Centralized stack: composed of one RNN (forward in time)
 
-# TODO: improve explanation of the general architecture
+For more information, see: notebooks/06_DelayedStackDimensions.ipynb
 # TODO: finish explanation in notebooks/06_DelayedStackDimensions.ipynb
+
+.. Note:
+    We expect the spectrogram to have shape: [B, FREQ, FRAMES] where B is batch size
+
+    Explanation of axis of one of the spectrogram in the batch, which has shape [FREQ, FRAMES]:
+
+    high frequencies  M +------------------------+
+                        |     | |                |
+         FREQ = j       |     | | <- a frame     |
+                        |     | |                |
+    low frequencies   0 +------------------------+
+                        0                        T
+                   start time    FRAMES = i    final time
+
+    As the paper describes:
+    - row major ordering
+    - a frame is x_(i,*)
+    - which proceeds through each frame from low to high frequency
 """
 
 from typing import Tuple
@@ -16,24 +38,6 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
-
-"""
- We expect the spectrogram to have shape: [B, FREQ, FRAMES] where B is batch size
- 
- Explanation of axis of the spectrogram:
- high frequencies  M +------------------------+
-                     |     | |                |
-      FREQ = j       |     | | <- a frame     |
-                     |     | |                |
- low frequencies   0 +------------------------+
-                     0                        T
-               start time    FRAMES = i    final time
-                     
- As the paper describes:
- - row major ordering
- - a frame is x_(i,*)
- - which proceeds through each frame from low to high frequency
-"""
 
 
 class DelayedStackLayer(nn.Module):
@@ -50,9 +54,10 @@ class DelayedStackLayer(nn.Module):
         >> B, FREQ, FRAMES = spectrogram.shape
         >> hidden_size = ...
         >> has_central_stack =
-        >> layers = [DelayedStackLayer(layer=l,
-                                    hidden_size=hidden_size,
-                                    has_central_stack=has_central_stack) for l in range(num_layers)]
+        >> layers = nn.ModuleList([DelayedStackLayer(layer=l,
+                                                     hidden_size=hidden_size,
+                                                     has_central_stack=has_central_stack)
+                                   for l in range(num_layers)])
         >> for layer in layers:
         >>     h_t, h_f, h_c = layer(h_t, h_f, h_c)
     """
@@ -88,7 +93,8 @@ class DelayedStackLayer(nn.Module):
 
         # in_features=hidden_size*3 because in_features is the concatenation of the
         # three RNN hidden states
-        self.W_t_l = nn.Linear(in_features=hidden_size * 3, out_features=hidden_size, bias=False)
+        # NOTE: should bias=False?
+        self.W_t_l = nn.Linear(in_features=hidden_size * 3, out_features=hidden_size)
 
         # Layer of Frequency-Delayed Stack composed of a one-dimensional RNN (Section 4.2)
         self.rnn_f_l = nn.LSTM(input_size=hidden_size,
@@ -233,7 +239,7 @@ class DelayedStackLayer0(nn.Module):
         >> h_t, h_f, h_c = l_0(spectrogram)
     """
 
-    def __init__(self, hidden_size: int, has_central_stack: bool, FREQ: int):
+    def __init__(self, hidden_size: int, has_central_stack: bool, freq: int):
         """
         Args:
             hidden_size (int): hidden_size parameter for the hidden_state shape of the RNN.
@@ -245,7 +251,7 @@ class DelayedStackLayer0(nn.Module):
 
         self.hidden_size = hidden_size
         self.has_central_stack = has_central_stack
-        self.FREQ = FREQ
+        self.freq = freq
 
         # Layer zero of Time-Delayed Stack composed of a linear transformation (Section 4.1)
         self.W_t_0 = nn.Linear(in_features=1,
@@ -256,7 +262,7 @@ class DelayedStackLayer0(nn.Module):
                                out_features=hidden_size)
 
         # Layer zero of Centralized Stack composed of a linear transformation (Section 4.3)
-        self.W_c_0 = nn.Linear(in_features=FREQ,
+        self.W_c_0 = nn.Linear(in_features=freq,
                                out_features=hidden_size)
 
     def forward(self, spectrogram: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
@@ -277,7 +283,7 @@ class DelayedStackLayer0(nn.Module):
         """
         B, FREQ, FRAMES = spectrogram.size()
 
-        assert FREQ == self.FREQ, \
+        assert FREQ == self.freq, \
             "Current second dimension of spectrogram (FREQ) and previously declared FREQ " \
             "do not match"
 
