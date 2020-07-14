@@ -51,10 +51,11 @@ def wave_to_spectrogram(waveforms: Tensor, hp: HParams) -> Tensor:
     assert len(waveforms.size()) == 3, \
         "Dimensions of waveforms should be 3: [B, 1, L], but found {}".format(len(waveforms.size()))
 
-    spectrogram = torchaudio.transforms.Spectrogram(n_fft=hp.n_fft,
-                                                    win_length=hp.win_length,
-                                                    hop_length=hp.hop_length,
-                                                    power=hp.power)
+    stype = 2 if hp.audio.spectrogram_type == 'power' else 1
+    spectrogram = torchaudio.transforms.Spectrogram(n_fft=hp.audio.n_fft,
+                                                    win_length=hp.audio.win_length,
+                                                    hop_length=hp.audio.hop_length,
+                                                    power=stype)
     return spectrogram(waveforms).squeeze(dim=1)
 
 
@@ -74,11 +75,12 @@ def spectrogram_to_wave(spectrogram: Tensor, hp: HParams, n_iter: int = 32) -> T
         "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES], but found {}".format(
             len(spectrogram.size()))
 
-    griffinlim = torchaudio.transforms.GriffinLim(n_fft=hp.n_fft,
+    stype = 2 if hp.audio.spectrogram_type == 'power' else 1
+    griffinlim = torchaudio.transforms.GriffinLim(n_fft=hp.audio.n_fft,
                                                   n_iter=n_iter,
-                                                  win_length=hp.win_length,
-                                                  hop_length=hp.hop_length,
-                                                  power=hp.power)
+                                                  win_length=hp.audio.win_length,
+                                                  hop_length=hp.audio.hop_length,
+                                                  power=stype)
     return griffinlim(spectrogram).unsqueeze(dim=1)
 
 
@@ -99,8 +101,8 @@ def spectrogram_to_melspectrogram(spectrogram: Tensor, hp: HParams) -> Tensor:
 
     # FIXME: should MelScale only be applied to power spectrogram (and not to a linear one)?
     #  Ask for an answer
-    melscale = torchaudio.transforms.MelScale(n_mels=hp.mel_channels,
-                                              sample_rate=hp.sample_rate)
+    melscale = torchaudio.transforms.MelScale(n_mels=hp.audio.mel_channels,
+                                              sample_rate=hp.audio.sample_rate)
     return melscale(spectrogram)
 
 
@@ -121,9 +123,9 @@ def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams, n_iter: i
             len(melspectrogram.size()))
 
     # n_stft = nº bins in spectrogram depending on n_fft, exactly n_fft // 2 + 1
-    inversemelscale = torchaudio.transforms.InverseMelScale(n_stft=hp.n_fft // 2 + 1,
-                                                            n_mels=hp.mel_channels,
-                                                            sample_rate=hp.sample_rate,
+    inversemelscale = torchaudio.transforms.InverseMelScale(n_stft=hp.audio.n_fft // 2 + 1,
+                                                            n_mels=hp.audio.mel_channels,
+                                                            sample_rate=hp.audio.sample_rate,
                                                             max_iter=n_iter)
     return inversemelscale(melspectrogram)
 
@@ -143,11 +145,11 @@ def wave_to_melspectrogram(waveform: Tensor, hp: HParams) -> Tensor:
         "Dimensions of spectrogram should be 3: [B, 1, L], but found {}".format(
             len(waveform.size()))
 
-    melsprectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=hp.sample_rate,
-                                                           n_fft=hp.n_fft,
-                                                           win_length=hp.win_length,
-                                                           hop_length=hp.hop_length,
-                                                           n_mels=hp.mel_channels)
+    melsprectrogram = torchaudio.transforms.MelSpectrogram(sample_rate=hp.audio.sample_rate,
+                                                           n_fft=hp.audio.n_fft,
+                                                           win_length=hp.audio.win_length,
+                                                           hop_length=hp.audio.hop_length,
+                                                           n_mels=hp.audio.mel_channels)
     return melsprectrogram(waveform).squeeze(dim=1)
 
 
@@ -188,7 +190,7 @@ def amplitude_to_db(spectrogram: Tensor, hp: HParams) -> Tensor:
         "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES] or [B, N_MELS, FRAMES], " \
         "but found {}".format(len(spectrogram.size()))
 
-    stype = 'power' if hp.power == 2 else 'magnitude'
+    stype = 'power' if hp.audio.spectrogram_type == 'power' else 'magnitude'
     amplitudetodb = torchaudio.transforms.AmplitudeToDB(stype=stype)
     return amplitudetodb(spectrogram)
 
@@ -210,7 +212,7 @@ def db_to_amplitude(spectrogram: Tensor, hp: HParams) -> Tensor:
         "but found {}".format(len(spectrogram.size()))
 
     # power_exp calculated according to torchaudio.functional.DB_to_amplitude docs
-    power_exp = 1 if hp.power == 2 else 0.5
+    power_exp = 1 if hp.audio.spectrogram_type == 'power' else 0.5
     return F.DB_to_amplitude(spectrogram, ref=1, power=power_exp)
 
 
@@ -227,7 +229,7 @@ def plot_wave(waveforms: Tensor, hp: HParams) -> None:
 
     for idx, waveform in enumerate(waveforms):
         print("Waveform {}, shape: {}".format(idx, waveform.size()))
-        print("Waveform {}, Sample rate: {}".format(idx, hp.sample_rate))
+        print("Waveform {}, Sample rate: {}".format(idx, hp.audio.sample_rate))
 
     n_waveforms = waveforms.shape[0]
     fig = plt.figure()
@@ -292,4 +294,4 @@ def save_wave(filepath: str, waveform: Tensor, hp: HParams) -> None:
             of times the waveform has been sampled.
         hp (HParams): parameters. Parameters needed are sample_rate.
     """
-    torchaudio.save(filepath, waveform, hp.sample_rate)
+    torchaudio.save(filepath, waveform, hp.audio.sample_rate)

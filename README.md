@@ -23,7 +23,8 @@ SpeechGeneration-MelNet
 |   `-- params    <- description of the parameters to train and do speech synthesis according 
 |                    to the paper and the dataset
 |
-|-- notebooks     <- Jupyter Notebooks explaining different parts of the data pipeline or the model
+|-- notebooks     <- Jupyter Notebooks explaining different parts of the data pipeline 
+|                    or the model
 |
 |-- src                  <- source code for use in this project
 |   |-- data             <- scripts to download and load the data
@@ -38,10 +39,10 @@ SpeechGeneration-MelNet
 ## Installation 
 ### Installation with Anaconda
 0. Download and install [Anaconda](https://www.anaconda.com/)
-1. Clone the [source code](https://github.com/jgarciapueyo/SpeechGeneration-MelNet) with git:
+1. Clone the [source code](https://github.com/jgarciapueyo/MelNet-SpeechGeneration) with git:
 ```
-git clone https://github.com/jgarciapueyo/SpeechGeneration-MelNet
-cd SpeechGeneration-MelNet
+git clone https://github.com/jgarciapueyo/MelNet-SpeechGeneration
+cd MelNet-SpeechGeneration
 ```
 2. Prepare the environment with Anaconda
 ```

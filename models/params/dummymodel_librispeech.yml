@@ -1,0 +1,36 @@
+# (str) identifies the model to be trained and its parameters
+name: 'dummymodel_librispeech'
+
+# Parameters related with the data pipeline (transforms between different audio representations like
+# audio waveform, spectrogram, melspectrogram, ...).
+audio:
+  # (int): sample rate of the sample audio in Hz
+  sample_rate: 16000
+  # (str) type of spectrogram it will represent: 'linear' for energy, 'power' for power
+  spectrogram_type: 'power'
+  # (int) size of the Fast Fourier Transform
+  n_fft: 1536  # 6 * 256
+  # (int) number of mel channels when transforming to MelSpectrogram
+  mel_channels: 256
+  # (int) length of hop between STFT windows
+  hop_length: 256
+  # (int) window size
+  win_length: 1536  # 6 * 256
+
+# Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
+network:
+  n_tiers: 1
+  layers: [4]
+  hidden_size: 512
+  gmm_size: 10
+
+# Information related to the folder where the data for training is found and additional information
+# depending on the dataset being used.
+data:
+  path: "MelNet-SpeechGeneration/data"
+  url: "dev-clean"
+
+# Parameters related with the training phase (optimizer, learning rate, ...)
+training:
+  optimizer: 'RMSProp'
+  lr: 0.0001
