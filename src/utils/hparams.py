@@ -22,6 +22,7 @@ Reference:
 import yaml
 
 from attrdict import AttrDict
+import torch
 
 
 class HParams(AttrDict):
@@ -37,7 +38,12 @@ class HParams(AttrDict):
     @classmethod
     def from_yaml(cls, path: str) -> AttrDict:
         with open(path) as yaml_file:
-            return cls(yaml.safe_load(yaml_file))
+            # Read parameters from yaml file
+            hparams = cls(yaml.safe_load(yaml_file))
+            # Update parameters with device to do the calculations on the GPU or CPU
+            hparams["training"]["device"] = torch.device(
+                'cuda:0' if torch.cuda.is_available() else 'cpu')
+            return hparams
 
 
 class HParamsManual(dict):

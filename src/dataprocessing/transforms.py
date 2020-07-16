@@ -5,7 +5,7 @@ audio waveform, linear spectrogram, mel spectrogram.
 from typing import List
 
 import matplotlib.pyplot as plt
-from torch import Tensor
+from torch import Tensor, device
 import torchaudio
 from torchaudio import functional as F
 
@@ -19,7 +19,7 @@ def resample(waveforms: Tensor, orig_freq: int, new_freq: int) -> Tensor:
     r"""Wrapper around torchaudio.transforms.Resample().
 
     Args:
-        waveform (Tensor): audio waveform. Shape: [B, 1, L] where L is the number of times the waveform
+        waveforms (Tensor): audio waveform. Shape: [B, 1, L] where L is the number of times the waveform
             has been sampled and B is batch size.
         orig_freq (int)
         new_freq (int)
@@ -39,7 +39,7 @@ def wave_to_spectrogram(waveforms: Tensor, hp: HParams) -> Tensor:
     r"""Wrapper around torchaudio.transforms.Spectrogram().
 
     Args:
-        waveform (Tensor): audio waveform. Shape: [B, 1, L] where L is the number of times the waveform
+        waveforms (Tensor): audio waveform. Shape: [B, 1, L] where L is the number of times the waveform
             has been sampled and B is batch size.
         hp (HParams): parameters. Parameters needed are n_fft, win_length, hop_length and power.
 
@@ -55,7 +55,7 @@ def wave_to_spectrogram(waveforms: Tensor, hp: HParams) -> Tensor:
     spectrogram = torchaudio.transforms.Spectrogram(n_fft=hp.audio.n_fft,
                                                     win_length=hp.audio.win_length,
                                                     hop_length=hp.audio.hop_length,
-                                                    power=stype)
+                                                    power=stype).to(hp.training.device)
     return spectrogram(waveforms).squeeze(dim=1)
 
 
@@ -80,7 +80,7 @@ def spectrogram_to_wave(spectrogram: Tensor, hp: HParams, n_iter: int = 32) -> T
                                                   n_iter=n_iter,
                                                   win_length=hp.audio.win_length,
                                                   hop_length=hp.audio.hop_length,
-                                                  power=stype)
+                                                  power=stype).to(hp.training.device)
     return griffinlim(spectrogram).unsqueeze(dim=1)
 
 
@@ -102,7 +102,7 @@ def spectrogram_to_melspectrogram(spectrogram: Tensor, hp: HParams) -> Tensor:
     # FIXME: should MelScale only be applied to power spectrogram (and not to a linear one)?
     #  Ask for an answer
     melscale = torchaudio.transforms.MelScale(n_mels=hp.audio.mel_channels,
-                                              sample_rate=hp.audio.sample_rate)
+                                              sample_rate=hp.audio.sample_rate).to(hp.training.device)
     return melscale(spectrogram)
 
 
@@ -126,7 +126,7 @@ def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams, n_iter: i
     inversemelscale = torchaudio.transforms.InverseMelScale(n_stft=hp.audio.n_fft // 2 + 1,
                                                             n_mels=hp.audio.mel_channels,
                                                             sample_rate=hp.audio.sample_rate,
-                                                            max_iter=n_iter)
+                                                            max_iter=n_iter).to(hp.training.device)
     return inversemelscale(melspectrogram)
 
 
@@ -149,7 +149,7 @@ def wave_to_melspectrogram(waveform: Tensor, hp: HParams) -> Tensor:
                                                            n_fft=hp.audio.n_fft,
                                                            win_length=hp.audio.win_length,
                                                            hop_length=hp.audio.hop_length,
-                                                           n_mels=hp.audio.mel_channels)
+                                                           n_mels=hp.audio.mel_channels).to(hp.training.device)
     return melsprectrogram(waveform).squeeze(dim=1)
 
 
@@ -191,7 +191,7 @@ def amplitude_to_db(spectrogram: Tensor, hp: HParams) -> Tensor:
         "but found {}".format(len(spectrogram.size()))
 
     stype = 'power' if hp.audio.spectrogram_type == 'power' else 'magnitude'
-    amplitudetodb = torchaudio.transforms.AmplitudeToDB(stype=stype)
+    amplitudetodb = torchaudio.transforms.AmplitudeToDB(stype=stype).to(hp.training.device)
     return amplitudetodb(spectrogram)
 
 
@@ -232,6 +232,8 @@ def plot_wave(waveforms: Tensor, hp: HParams) -> None:
         print("Waveform {}, Sample rate: {}".format(idx, hp.audio.sample_rate))
 
     n_waveforms = waveforms.shape[0]
+    # In case the waveforms tensor is in the GPU
+    waveforms = waveforms.detach().to('cpu')
     fig = plt.figure()
     for i in range(0, n_waveforms):
         fig.add_subplot(n_waveforms, 1, i + 1)
@@ -255,10 +257,12 @@ def plot_spectrogram(spectrogram: Tensor, hp: HParams) -> None:
         "Dimensions of spectogram should be 3, found {}".format(len(spectrogram.size()))
 
     n_spectrograms = spectrogram.shape[0]
+    # In case the spectrogram tensor is in the GPU
+    spectrogram = spectrogram.detach().to('cpu')
     fig = plt.figure()
     for i in range(0, n_spectrograms):
         fig.add_subplot(n_spectrograms, 1, i + 1)
-        plt.imshow(spectrogram[i], origin='lower')
+        plt.imshow(spectrogram[i].detach().to('cpu'), origin='lower')
         plt.axis('off')
     plt.show()
 
@@ -277,6 +281,8 @@ def plot_melspectrogram(melspectrogram: Tensor, hp: HParams) -> None:
         "Dimensions of melspectogram should be 3, found {}".format(len(melspectrogram.size()))
 
     n_melspectrograms = melspectrogram.shape[0]
+    # In case the spectrogram tensor is in the GPU
+    melspectrogram = melspectrogram.detach().to('cpu')
     fig = plt.figure()
     for i in range(0, n_melspectrograms):
         fig.add_subplot(n_melspectrograms, 1, i + 1)
@@ -294,4 +300,6 @@ def save_wave(filepath: str, waveform: Tensor, hp: HParams) -> None:
             of times the waveform has been sampled.
         hp (HParams): parameters. Parameters needed are sample_rate.
     """
+    # In case the waveform is in the GPU
+    waveform = waveform.detach().to('cpu')
     torchaudio.save(filepath, waveform, hp.audio.sample_rate)

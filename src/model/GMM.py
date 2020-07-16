@@ -93,7 +93,7 @@ def sample_gmm(mu: Tensor, std: Tensor, pi: Tensor) -> Tensor:
     return generated
 
 
-def sample_gmm_batch(mu: Tensor, std: Tensor, pi: Tensor) -> Tensor:
+def sample_gmm_batch(mu_hat: Tensor, std_hat: Tensor, pi_hat: Tensor) -> Tensor:
     r"""
     Sample B times (where B is batch size) from i*j GMM distributions defined by \mu, \std and
     \pi, one GMM distribution for every x_{ij}.
@@ -103,21 +103,21 @@ def sample_gmm_batch(mu: Tensor, std: Tensor, pi: Tensor) -> Tensor:
         modelled by a Gaussian Mixture Model with k components.
 
     Args:
-        mu (Tensor): means of GMM with k components for every x_{ij} for every item in batch of
-                     size B. Shape: [B, i, j, K]
-        std (Tensor): std of GMM with k components for every x_{ij} for every item in batch of
-                     size B. Shape: [B, i, j, K]
-        pi (Tensor): pi of GMM with k components for every x_{ij} for every item in batch of
-                     size B. Shape: [B, i, j, K]
+        mu_hat (Tensor): unconstrained means of GMM with k components for every x_{ij} for every
+                         item in batch of size B. Shape: [B, i, j, K]
+        std_hat (Tensor): unconstrained std of GMM with k components for every x_{ij} for every
+                          item in batch of size B. Shape: [B, i, j, K]
+        pi_hat (Tensor): unconstrained pi of GMM with k components for every x_{ij} for every item
+                         in batch of size B. Shape: [B, i, j, K]
 
     Returns:
         samples (Tensor): One sample for every GMM corresponding to every x_{ij} for every item
                           in batch of size B. Shape: [B, i, j]
     """
     # enforce constraints on parameters mu, std, pi according to MelNet formula (3), (4), (5)
-    mu = constraint_mu(mu)
-    std = constraint_std(std)
-    pi = constraint_pi(pi)
+    mu = constraint_mu(mu_hat)
+    std = constraint_std(std_hat)
+    pi = constraint_pi(pi_hat)
 
     # choose component to sample for every x_ij in an item in the batch
     k_idx = torch.distributions.categorical.Categorical(probs=pi).sample().unsqueeze(dim=-1)
@@ -178,7 +178,7 @@ def loss_gmm(mu: Tensor, std: Tensor, pi: Tensor, data: Tensor) -> Tensor:
     return loss.sum()
 
 
-def loss_gmm_batch(mu: Tensor, std: Tensor, pi: Tensor, data: Tensor) -> Tensor:
+def loss_gmm_batch(mu_hat: Tensor, std_hat: Tensor, pi_hat: Tensor, data: Tensor) -> Tensor:
     r"""
     Loss of B items, each with i*j GMM distributions defined by \mu, \std and \pi, one GMM
     distribution for every x_{ij}, with respect to \data.
@@ -188,12 +188,12 @@ def loss_gmm_batch(mu: Tensor, std: Tensor, pi: Tensor, data: Tensor) -> Tensor:
         modelled by a Gaussian Mixture Model with k components.
 
     Args:
-        mu (Tensor): means of GMM with k components for every x_{ij} for every item in batch of
-                     size B. Shape: [B, i, j, K]
-        std (Tensor): std of GMM with k components for every x_{ij} for every item in batch of
-                     size B. Shape: [B, i, j, K]
-        pi (Tensor): pi of GMM with k components for every x_{ij} for every item in batch of
-                     size B. Shape: [B, i, j, K]
+        mu_hat (Tensor): unconstrained means of GMM with k components for every x_{ij} for every
+                         item in batch of size B. Shape: [B, i, j, K]
+        std_hat (Tensor): unconstrained std of GMM with k components for every x_{ij} for every
+                          item in batch of size B. Shape: [B, i, j, K]
+        pi_hat (Tensor): unconstrained pi of GMM with k components for every x_{ij} for every
+                         item in batch of size B. Shape: [B, i, j, K]
         data (Tensor): real data to calculate the loss. Shape: shape [B, i, j]
 
     Returns:
@@ -201,9 +201,14 @@ def loss_gmm_batch(mu: Tensor, std: Tensor, pi: Tensor, data: Tensor) -> Tensor:
                     Shape: [] (0 dimension)
         """
     # enforce constraints on parameters mu, std, pi according to MelNet formula (3), (4), (5)
-    mu = constraint_mu(mu)
-    std = constraint_std(std)
-    pi = constraint_pi(pi)
+    mu = constraint_mu(mu_hat)
+    std = constraint_std(std_hat)
+    # if std_hat was very negative, std would be very close to 0 and because there is a limited
+    # precision, std would be exactly 0, causing a problem when calculating log-probabilities
+    # For this reason, we clamp the values of std that are 0 to a value close to 0
+    std = torch.clamp(std, min=0.00001)
+
+    pi = constraint_pi(pi_hat)
 
     # modify data to fit the number of components of the GMM. For that:
     # - change shape of data from [B, i, j] to [B, i, j, 1]

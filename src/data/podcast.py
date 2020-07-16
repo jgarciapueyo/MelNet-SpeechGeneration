@@ -17,40 +17,10 @@ import os
 from typing import Tuple
 
 from torch import Tensor
+import torch
 from torch.utils.data import Dataset
 import torchaudio
 from torchaudio.datasets.utils import unicode_csv_reader, walk_files
-
-
-def load_podcast_item(fileid: str, root: str, audio_folder: str, ext_audio: str,
-                      text: Tuple[str, str]) -> Tuple[Tensor, int, Tuple[str, str], str, str, str]:
-    """
-    Load one item of the PODCAST dataset. Each item is a tuple of the form:
-    waveform, sample_rate, [grapheme_text, phoneme_text], season_id, episode_id, utterance_id
-
-    Args:
-        fileid (str): name of the file to load (without extension).
-        root (str): root folder of the dataset.
-        audio_folder (str): folder with the audio files inside root folder.
-        ext_audio (str): extension type of the audiofiles.
-        text (Tuple[str, str]): text transcription of audio file in grapheme_text and in phoneme_text.
-
-    Returns:
-        waveform (Tensor): audio waveform of the audio. Shape: [1, L] where L is the number of times
-            the waveform has been sampled.
-        sample_rate (int): sample rate of the waveform
-        text (Tuple[str, str]): grapheme text (characters) and phoneme text (how it sounds)
-        season_id (str): podcast season of the item
-        episode_id (str): episode of the item
-        utterance_id (str): utterance string of the item
-    """
-    # Read audio
-    file_audio = os.path.join(root, audio_folder, fileid + ext_audio)
-    waveform, sample_rate = torchaudio.load(file_audio)
-
-    season_id, episode_id, utterance_id = fileid.split("_")
-
-    return waveform, sample_rate, text, season_id, episode_id, utterance_id
 
 
 class PODCAST(Dataset):
@@ -72,6 +42,8 @@ class PODCAST(Dataset):
     def __init__(self, root: str, audio_folder: str, text_file: str):
         self._root = root
         self._audio_folder = audio_folder
+        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
         walker = walk_files(root, suffix=self._ext_audio, prefix=False, remove_suffix=True)
         self._walker = list(walker)
 
@@ -105,8 +77,40 @@ class PODCAST(Dataset):
             utterance_id (str): utterance string of the item
         """
         fileid, grapheme, g2p = self._text[n]
-        return load_podcast_item(fileid, self._root, self._audio_folder, self._ext_audio,
-                                 (grapheme, g2p))
+        return self.load_podcast_item(fileid, self._root, self._audio_folder, self._ext_audio,
+                                      (grapheme, g2p))
 
     def __len__(self):
         return len(self._walker)
+
+    def load_podcast_item(self, fileid: str, root: str, audio_folder: str, ext_audio: str,
+                          text: Tuple[str, str]) -> \
+            Tuple[Tensor, int, Tuple[str, str], str, str, str]:
+        """
+        Load one item of the PODCAST dataset. Each item is a tuple of the form:
+        waveform, sample_rate, [grapheme_text, phoneme_text], season_id, episode_id, utterance_id
+
+        Args:
+            fileid (str): name of the file to load (without extension).
+            root (str): root folder of the dataset.
+            audio_folder (str): folder with the audio files inside root folder.
+            ext_audio (str): extension type of the audiofiles.
+            text (Tuple[str, str]): text transcription of audio file in grapheme_text and in phoneme_text.
+
+        Returns:
+            waveform (Tensor): audio waveform of the audio. Shape: [1, L] where L is the number of times
+                the waveform has been sampled.
+            sample_rate (int): sample rate of the waveform
+            text (Tuple[str, str]): grapheme text (characters) and phoneme text (how it sounds)
+            season_id (str): podcast season of the item
+            episode_id (str): episode of the item
+            utterance_id (str): utterance string of the item
+        """
+        # Read audio
+        file_audio = os.path.join(root, audio_folder, fileid + ext_audio)
+        waveform, sample_rate = torchaudio.load(file_audio)
+
+        season_id, episode_id, utterance_id = fileid.split("_")
+
+        return waveform, sample_rate, text, season_id, \
+               episode_id, utterance_id
