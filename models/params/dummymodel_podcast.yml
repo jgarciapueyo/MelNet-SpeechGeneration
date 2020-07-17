@@ -22,6 +22,7 @@ audio:
   min_level_db: -100
 
 # Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
+# See MelNet paper Table 1.
 network:
   n_tiers: 1
   layers: [3]
@@ -31,15 +32,31 @@ network:
 # Information related to the folder where the data for training is found and additional information
 # depending on the dataset being used.
 data:
-  path: 'data/Podcast'
+  dataset: 'podcast'
+  path: 'data/Podcast/'
   audio_folder: 'corpus'
   text_file: 'metadata_TCC.csv'
 
 # Parameters related with the training phase (optimizer, learning rate, ...)
 training:
   optimizer: 'RMSProp'
+  epochs: 2
   batch_size: 1
   lr: 0.0010
   momentum: 0.9
   # (int) number of workers for loading the data
   num_workers: 1
+  # (int) iterations between model save
+  save_iterations: 3
+  # (str) path where to save model weights
+  dir_chkpt: 'models/chkpt/'
+
+# Information related to the folder and paths where to save the logs and the model weights during
+# training
+logging:
+  # (str) path where to save the tensorboard logs
+  dir_log_tensorboard: 'logs/tensorboard/'
+  # (str) path where to save other logs
+  dir_log: 'logs/general/'
+  # (int) iterations between logs
+  log_iterations: 1

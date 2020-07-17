@@ -1,11 +1,24 @@
+import sys
+
+"""
 from data import librispeech, podcast
 from dataprocessing import transforms as T, transforms_librosa
 import matplotlib.pyplot as plt
 import torch
 import utils.hparams as hparams
 from model import GMM
-
+"""
 if __name__ == '__main__':
+    for folder in sys.path:
+        print(folder)
+
+    import pkgutil
+
+    search_path = ['.']  # set to None to see all modules importable from sys.path
+    all_modules = [x[1] for x in pkgutil.iter_modules(path=search_path)]
+    print(all_modules)
+
+    """
     librispeech = librispeech.download_data('../data', 'dev-clean')
     dataloader_librispeech = torch.utils.data.DataLoader(librispeech)
     dataiter = iter(dataloader_librispeech)
@@ -25,6 +38,7 @@ if __name__ == '__main__':
 
     #waveform1, sample_rate1, text1, season_id1, episode_id1, utterance_id1 = dataiter_podcast.next()
     #transforms_librosa.plot_wave([waveform1], sample_rate1)
+    """
 
 
 

@@ -19,7 +19,14 @@ representations (spectrograms) in conjunction with a highly expressive probabili
 SpeechGeneration-MelNet
 |
 |-- data          <- original data used to train the model (you have to create it)
+|
+|-- logs             <- (you have to create it or it will be created automatically)
+|   |-- general      <- logs for general training
+|   `-- tensorboard  <- logs for displaying in tensorboard
+|
 |-- models
+|   |-- chkpt     <- model weigths for different runs stored in pickle format. It stores also the
+|   |                training parameters. (you have to create it or it'll be created automatically)
 |   `-- params    <- description of the parameters to train and do speech synthesis according 
 |                    to the paper and the dataset
 |
