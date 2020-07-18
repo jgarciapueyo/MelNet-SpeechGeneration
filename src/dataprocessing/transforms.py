@@ -291,6 +291,29 @@ def plot_melspectrogram(melspectrogram: Tensor, hp: HParams) -> None:
     plt.show()
 
 
+def save_spectrogram(filepath: str, spectrogram: Tensor, hp: HParams) -> None:
+    r"""Saves spectrogram as an image.
+
+    Args:
+        filepath (str): path where the spectrogram will be saved.
+        spectrogram (Tensor): spectrogram. Shape: [B, FREQ, FRAMES].
+        hp (HParams): parameters.
+    """
+    assert len(spectrogram.size()) == 3, \
+        "Dimensions of spectogram should be 3, found {}".format(len(spectrogram.size()))
+
+    n_spectrograms = spectrogram.shape[0]
+    # In case the spectrogram tensor is in the GPU
+    spectrogram = spectrogram.detach().to('cpu')
+    fig = plt.figure()
+    for i in range(0, n_spectrograms):
+        fig.add_subplot(n_spectrograms, 1, i + 1)
+        plt.imshow(spectrogram[i].detach().to('cpu'), origin='lower')
+        plt.axis('off')
+
+    fig.savefig(fname=filepath)
+
+
 def save_wave(filepath: str, waveform: Tensor, hp: HParams) -> None:
     r"""Wrapper around torchaudio.save().
 
