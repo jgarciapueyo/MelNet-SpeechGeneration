@@ -1,3 +1,6 @@
+# This file contains the parameters for trying training locally with a very little model with
+# podcast dataset
+
 # (str) identifies the model to be trained and its parameters
 name: 'dummymodel_podcast'
 
@@ -40,14 +43,14 @@ data:
 # Parameters related with the training phase (optimizer, learning rate, ...)
 training:
   optimizer: 'RMSProp'
-  epochs: 2
+  epochs: 1
   batch_size: 1
   lr: 0.0010
   momentum: 0.9
   # (int) number of workers for loading the data
   num_workers: 1
   # (int) iterations between model save
-  save_iterations: 3
+  save_iterations: 10
   # (str) path where to save model weights
   dir_chkpt: 'models/chkpt/'
 

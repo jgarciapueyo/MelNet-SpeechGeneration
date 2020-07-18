@@ -1,3 +1,6 @@
+# This file contains the parameters for trying training locally with a very little model with
+# librispeech dataset
+
 # (str) identifies the model to be trained and its parameters
 name: 'dummymodel_librispeech'
 
@@ -45,7 +48,7 @@ training:
   # (int) number of workers for loading the data
   num_workers: 1
   # (int) iterations between model save
-  save_iterations: 3
+  save_iterations: 40
   # (str) path where to save model weights
   dir_chkpt: 'models/chkpt/'
 

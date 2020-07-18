@@ -24,6 +24,7 @@ For more information, see notebooks/08_MelNet.ipynb
     - a frame is x_(i,*)
     - which proceeds through each frame from low to high frequency
 """
+import logging
 from typing import List, Tuple
 
 from torch import Tensor
@@ -32,6 +33,7 @@ import torch.nn as nn
 
 from src.model.Tier import Tier
 from src.model.GMM import sample_gmm_batch
+from src.utils.hparams import HParams
 
 
 class MelNet(nn.Module):
@@ -100,11 +102,13 @@ class MelNet(nn.Module):
         """
         return self.tiers[tier_idx](spectrogram)
 
-    def sample(self, n_samples: int, length: int) -> Tensor:
+    def sample(self, hp: HParams, logger: logging.Logger, n_samples: int, length: int) -> Tensor:
         """
         Generates n_samples of audio of the given length.
 
         Args:
+            hp (HParams): parameters. Parameters needed are hp.training.device
+            logger (logging.Logger):
             n_samples (int): amount of samples to generate.
             length (int): length of the samples to generate (in timesteps).
 
@@ -122,17 +126,18 @@ class MelNet(nn.Module):
         # --- TIER 1 ----
         # The spectrogram is generated autoregressively, frame (length, or timestep) by frame.
         for i in range(0, length):
+            logger.info(f"Frame {i}/{length}")
             if x is None:
                 # If the spectrogram has not been initialized, we initialized to an initial frame
                 # of all zeros
-                x = torch.zeros((n_samples, self.freq, 1))
+                x = torch.zeros((n_samples, self.freq, 1), device=hp.training.device)
             else:
                 # If the spectrogram has already been initialized, we have already computed some
                 # frames. We concatenate a new frame initialized to all zeros which will be replaced
                 # pixel by pixel by the new values
                 # We change the shape from [B, FREQ, FRAMES] to [B, FREQ, FRAMES+1] by adding a new
                 # frame
-                x = torch.cat([x, torch.zeros((n_samples, self.freq, 1))], dim=-1)
+                x = torch.cat([x, torch.zeros((n_samples, self.freq, 1), device=hp.training.device)], dim=-1)
 
             # Inside a frame, the spectrogram is generated autoregressively, freq by freq
             for j in range(0, self.freq):

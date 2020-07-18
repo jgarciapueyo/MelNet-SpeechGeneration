@@ -2,14 +2,21 @@
 This module contains classes to log the training process as well as save the logs in a Tensorboard
 format.
 """
-from torch.utils.tensorboard import SummaryWriter
+import io
 
+import torch
+from torch import Tensor
+from torch.utils.tensorboard import SummaryWriter
+from PIL import Image
+import numpy as np
+
+from src.dataprocessing import transforms as T
 from src.utils.hparams import HParams
 
 
 class TensorboardWriter:
     """
-    Writes logs to be visualized in Tensorboard
+    Writes logs to be visualized in Tensorboard leter.
     """
 
     def __init__(self, hp: HParams):
@@ -17,28 +24,52 @@ class TensorboardWriter:
         Args:
             hp (HParams): parameters for logging. Parameters used are hp.logging.dir_log_tensorboard
         """
+        self.hp = hp
         self.writer = SummaryWriter(log_dir=hp.logging.dir_log_tensorboard)
 
-    def log_training(self, loss: int, epoch: int):
+    def log_training(self, hp: HParams, loss: int, epoch: int):
         """
-        Logging information related to training.
+        Logs information related to training.
 
         Args:
             loss (int): loss during training
         """
-        self.writer.add_scalar(tag='train/loss', scalar_value=loss, global_step=epoch)
+        tag = f"{hp.data.dataset}/train/loss"
+        self.writer.add_scalar(tag=tag, scalar_value=loss, global_step=epoch)
 
     def log_end_training(self, hp: HParams, loss: int):
         """
-        Logging parameters of the training and final loss.
+        Logs parameters of the training and final loss.
 
         Args:
-            hp:
-            loss:
+            hp (HParams):
+            loss (int):
         """
         params = get_important_hparams(hp)
-        metrics = {'loss': loss}
+        loss_tag = f"{hp.data.dataset}/train/loss_global"
+        metrics = {loss_tag: loss}
         self.writer.add_hparams(hparam_dict=params, metric_dict=metrics)
+
+    def log_synthesis(self, spectrogram: Tensor):
+        """
+        Logs the spectrogram produced in synthesis
+
+        Args:
+            spectrogram (Tensor):
+        """
+        # use a buffer to save the image
+        buf = io.BytesIO()
+        T.save_spectrogram(buf, spectrogram, self.hp)
+        buf.seek(0)
+        # transform image in buffer to torch tensor
+        spectrogram = np.array(Image.open(buf))
+        # remove fourth channel (transparency)
+        spectrogram = spectrogram[..., :3]
+        # add image
+        self.writer.add_image("synthesize", spectrogram, dataformats="HWC")
+
+    def close(self):
+        self.writer.close()
 
 
 def get_important_hparams(hp: HParams) -> dict:
