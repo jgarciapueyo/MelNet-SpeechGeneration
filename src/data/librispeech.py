@@ -37,7 +37,7 @@ def download_data(root: str, url: str) -> Dataset:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-r', '--root', type=str, required=False, default='../../data',
+    parser.add_argument('-r', '--root', type=str, required=False, default='../../datasets',
                         help="root directory where to download the dataset")
     parser.add_argument('-u', '--url', type=str, required=False, default='dev-clean',
                         help="version of the dataset to download. \

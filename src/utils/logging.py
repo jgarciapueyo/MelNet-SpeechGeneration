@@ -7,6 +7,7 @@ import io
 import torch
 from torch import Tensor
 from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.summary import hparams
 from PIL import Image
 import numpy as np
 
@@ -14,18 +15,68 @@ from src.dataprocessing import transforms as T
 from src.utils.hparams import HParams
 
 
-class TensorboardWriter:
+class CustomSummaryWriter(SummaryWriter):
     """
-    Writes logs to be visualized in Tensorboard leter.
+    Custom SummaryWriter that does not create a subfolder inside the folder for a given run when
+    calling add_hparams(...). (Default SummaryWriter creates a subfolder in the run folder every
+    time that the method add_hparams(...) is called)
     """
 
-    def __init__(self, hp: HParams):
+    def add_hparams(self, hparam_dict, metric_dict):
+        """Add a set of hyperparameters to be compared in TensorBoard.
+
+        Args:
+            hparam_dict (dict): Each key-value pair in the dictionary is the
+              name of the hyper parameter and it's corresponding value.
+            metric_dict (dict): Each key-value pair in the dictionary is the
+              name of the metric and it's corresponding value. Note that the key used
+              here should be unique in the tensorboard record. Otherwise the value
+              you added by ``add_scalar`` will be displayed in hparam plugin. In most
+              cases, this is unwanted.
+
+        Examples::
+
+            from torch.utils.tensorboard import SummaryWriter
+            with SummaryWriter() as w:
+                for i in range(5):
+                    w.add_hparams({'lr': 0.1*i, 'bsize': i},
+                                  {'hparam/accuracy': 10*i, 'hparam/loss': 10*i})
+        """
+        torch._C._log_api_usage_once("tensorboard.logging.add_hparams")
+        if type(hparam_dict) is not dict or type(metric_dict) is not dict:
+            raise TypeError('hparam_dict and metric_dict should be dictionary.')
+        exp, ssi, sei = hparams(hparam_dict, metric_dict)
+
+        # ---- Previously, add_hparams() added a subfolder inside each run ----
+        # logdir = os.path.join(
+        #     self._get_file_writer().get_logdir(),
+        #     str(time.time())
+        # )
+
+        # ---- Now, it does not add any subfolder ----
+        logdir = self._get_file_writer().get_logdir()
+
+        with SummaryWriter(log_dir=logdir) as w_hp:
+            w_hp.file_writer.add_summary(exp)
+            w_hp.file_writer.add_summary(ssi)
+            w_hp.file_writer.add_summary(sei)
+            for k, v in metric_dict.items():
+                w_hp.add_scalar(k, v)
+
+
+class TensorboardWriter:
+    """
+    Writes logs to be visualized in Tensorboard.
+    """
+
+    def __init__(self, hp: HParams, run_dir: str):
         """
         Args:
             hp (HParams): parameters for logging. Parameters used are hp.logging.dir_log_tensorboard
+            run_dir (str): directory to save logs of the current run.
         """
         self.hp = hp
-        self.writer = SummaryWriter(log_dir=hp.logging.dir_log_tensorboard)
+        self.writer = CustomSummaryWriter(log_dir=run_dir)
 
     def log_training(self, hp: HParams, loss: int, epoch: int):
         """
@@ -42,8 +93,8 @@ class TensorboardWriter:
         Logs parameters of the training and final loss.
 
         Args:
-            hp (HParams):
-            loss (int):
+            hp (HParams): parameters of the training of this run.
+            loss (int): final loss of the model.
         """
         params = get_important_hparams(hp)
         loss_tag = f"{hp.data.dataset}/train/loss_global"
@@ -109,6 +160,3 @@ def get_important_hparams(hp: HParams) -> dict:
     important_params["training.momentum"] = hp.training.momentum
 
     return important_params
-
-
-

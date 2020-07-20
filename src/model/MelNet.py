@@ -98,7 +98,9 @@ class MelNet(nn.Module):
                                   Shape: [B, FREQ, FRAMES]
 
         Returns:
-
+            mu_hat (Tensor): means of GMM with k components of tier_idx. Shape: [B, FREQ, FRAMES, K]
+            std_hat (Tensor): std of GMM with k components of tier_idx. Shape: [B, FREQ, FRAMES, K]
+            pi_hat (Tensor): pi of GMM with k components of tier_idx. Shape: [B, FREQ, FRAMES, K]
         """
         return self.tiers[tier_idx](spectrogram)
 

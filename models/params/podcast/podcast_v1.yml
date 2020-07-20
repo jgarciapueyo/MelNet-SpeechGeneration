@@ -2,7 +2,7 @@
 # podcast dataset
 
 # (str) identifies the model to be trained and its parameters
-name: 'podcast_v2'
+name: 'podcast_v1'
 
 # Parameters related with the data pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
@@ -36,7 +36,7 @@ network:
 # depending on the dataset being used.
 data:
   dataset: 'podcast'
-  path: 'data/Podcast/'
+  path: 'datasets/Podcast/'
   audio_folder: 'corpus'
   text_file: 'metadata_TCC.csv'
 
@@ -44,7 +44,7 @@ data:
 training:
   optimizer: 'RMSProp'
   epochs: 2
-  batch_size: 3
+  batch_size: 2
   lr: 0.000010
   momentum: 0.9
   # (int) number of workers for loading the data

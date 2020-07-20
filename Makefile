@@ -12,11 +12,11 @@ data-librispeech:
 
 # starts training on small MelNet model to test locally if training runs correctly
 dummy-train:
-	python src/train.py -p models/params/dummymodel_podcast.yml
+	python src/train.py -p models/params/podcast/dummymodel_podcast.yml
 
 # starts training on MelNet declared in yaml file (intended to use in when training real model)
 train:
-	python src/train.py -p models/params/podcast/podcast_v2.yml
+	python src/train.py -p models/params
 
 # sends the current project to the server (use from local computer)
 send:

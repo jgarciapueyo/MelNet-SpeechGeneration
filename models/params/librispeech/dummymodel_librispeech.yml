@@ -4,7 +4,7 @@
 # (str) identifies the model to be trained and its parameters
 name: 'dummymodel_librispeech'
 
-# Parameters related with the data pipeline (transforms between different audio representations like
+# Parameters related with the datasets pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
 audio:
   # (int): sample rate of the sample audio in Hz
@@ -31,11 +31,11 @@ network:
   hidden_size: 8
   gmm_size: 2
 
-# Information related to the folder where the data for training is found and additional information
+# Information related to the folder where the datasets for training is found and additional information
 # depending on the dataset being used.
 data:
   dataset: 'librispeech'
-  path: "data/librispeech/"
+  path: "datasets/librispeech/"
   url: "dev-clean"
 
 # Parameters related with the training phase (optimizer, learning rate, ...)
@@ -45,7 +45,7 @@ training:
   batch_size: 1
   lr: 0.0010
   momentum: 0.9
-  # (int) number of workers for loading the data
+  # (int) number of workers for loading the datasets
   num_workers: 1
   # (int) iterations between model save
   save_iterations: 40
