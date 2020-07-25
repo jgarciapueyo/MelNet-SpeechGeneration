@@ -55,7 +55,7 @@ def wave_to_spectrogram(waveforms: Tensor, hp: HParams) -> Tensor:
     spectrogram = torchaudio.transforms.Spectrogram(n_fft=hp.audio.n_fft,
                                                     win_length=hp.audio.win_length,
                                                     hop_length=hp.audio.hop_length,
-                                                    power=stype).to(hp.training.device)
+                                                    power=stype).to(hp.device)
     return spectrogram(waveforms).squeeze(dim=1)
 
 
@@ -80,7 +80,7 @@ def spectrogram_to_wave(spectrogram: Tensor, hp: HParams, n_iter: int = 32) -> T
                                                   n_iter=n_iter,
                                                   win_length=hp.audio.win_length,
                                                   hop_length=hp.audio.hop_length,
-                                                  power=stype).to(hp.training.device)
+                                                  power=stype).to(hp.device)
     return griffinlim(spectrogram).unsqueeze(dim=1)
 
 
@@ -102,7 +102,7 @@ def spectrogram_to_melspectrogram(spectrogram: Tensor, hp: HParams) -> Tensor:
     # FIXME: should MelScale only be applied to power spectrogram (and not to a linear one)?
     #  Ask for an answer
     melscale = torchaudio.transforms.MelScale(n_mels=hp.audio.mel_channels,
-                                              sample_rate=hp.audio.sample_rate).to(hp.training.device)
+                                              sample_rate=hp.audio.sample_rate).to(hp.device)
     return melscale(spectrogram)
 
 
@@ -126,7 +126,7 @@ def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams, n_iter: i
     inversemelscale = torchaudio.transforms.InverseMelScale(n_stft=hp.audio.n_fft // 2 + 1,
                                                             n_mels=hp.audio.mel_channels,
                                                             sample_rate=hp.audio.sample_rate,
-                                                            max_iter=n_iter).to(hp.training.device)
+                                                            max_iter=n_iter).to(hp.device)
     return inversemelscale(melspectrogram)
 
 
@@ -149,7 +149,7 @@ def wave_to_melspectrogram(waveform: Tensor, hp: HParams) -> Tensor:
                                                            n_fft=hp.audio.n_fft,
                                                            win_length=hp.audio.win_length,
                                                            hop_length=hp.audio.hop_length,
-                                                           n_mels=hp.audio.mel_channels).to(hp.training.device)
+                                                           n_mels=hp.audio.mel_channels).to(hp.device)
     return melsprectrogram(waveform).squeeze(dim=1)
 
 
@@ -191,7 +191,7 @@ def amplitude_to_db(spectrogram: Tensor, hp: HParams) -> Tensor:
         "but found {}".format(len(spectrogram.size()))
 
     stype = 'power' if hp.audio.spectrogram_type == 'power' else 'magnitude'
-    amplitudetodb = torchaudio.transforms.AmplitudeToDB(stype=stype).to(hp.training.device)
+    amplitudetodb = torchaudio.transforms.AmplitudeToDB(stype=stype).to(hp.device)
     return amplitudetodb(spectrogram)
 
 

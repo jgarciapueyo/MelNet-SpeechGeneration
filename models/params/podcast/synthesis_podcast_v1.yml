@@ -1,0 +1,10 @@
+
+# (str) identifies the file to do synthesis
+name: 'synthesis_podcast_v1'
+
+# (List[str]) path from project directory to the weights of the tiers of the model to perform
+#           synthesis. The tiers have to be ordered, from the first tier of the model being the
+#           first element in the list to the last tier of the model being the last item in the list
+checkpoints_path: [
+  "models/chkpt/dpodcast_v1_t1_l5_hd8_gmm10/tier1_20200725-181007_final.pt"  # First tier
+]

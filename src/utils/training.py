@@ -103,7 +103,7 @@ def resume_training(args: argparse.Namespace, hp: HParams, tier: int, model: Tie
         logger.error("New params for network structure are different from checkpoint.")
         raise Exception("New params for network structure are different from checkpoint.")
 
-    if checkpoint["tier"] != tier:
+    if checkpoint["tier_idx"] != tier:
         logger.error(
             f"New tier to train ({tier}) is different from checkpoint ({checkpoint['tier']}).")
         raise Exception(
@@ -120,7 +120,7 @@ def resume_training(args: argparse.Namespace, hp: HParams, tier: int, model: Tie
     # epoch_chkpt = checkpoint["epoch"]
     # iterations_chkpt = checkpoint["iterations"]
     # total_iterations_chkpt = checkpoint["total_iterations"]
-    model.load_state_dict(checkpoint["model"])
+    model.load_state_dict(checkpoint["tier"])
     optimizer.load_state_dict(checkpoint["optimizer"])
 
     return model, optimizer
@@ -142,8 +142,8 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
         extension_architecture (str): information about the network's architecture of this run
                                       (training) to identify the logs and weights of the model.
         timestamp (str): information that identifies completely this run (training).
-        logger (logging.Logger): to log general information about the training of the model.
         tensorboardwriter (TensorboardWriter): to log information about training to tensorboard.
+        logger (logging.Logger): to log general information about the training of the model.
     """
     logger.info(f"Start training of tier {tier}/{hp.network.n_tiers}")
 
@@ -158,9 +158,9 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
     model = Tier(tier=tier,
                  n_layers=hp.network.layers[tier - 1],
                  hidden_size=hp.network.hidden_size,
-                 gmm_size=hp.network.hidden_size,
+                 gmm_size=hp.network.gmm_size,
                  freq=tier_freq)
-    model = model.to(hp.training.device)
+    model = model.to(hp.device)
 
     # Setup loss criterion and optimizer
     criterion = GMMLoss()
@@ -187,7 +187,7 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
         for i, (waveform, utterance) in enumerate(dataloader):
 
             # 1.1 Transform waveform input to melspectrogram and apply preprocessing to normalize
-            waveform = waveform.to(device=hp.training.device, non_blocking=True)
+            waveform = waveform.to(device=hp.device, non_blocking=True)
             spectrogram = T.wave_to_melspectrogram(waveform, hp)
             spectrogram = preprocessing(spectrogram, hp)
             # 1.2 Get input and output from the original spectrogram for this tier
@@ -228,12 +228,12 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
                 if loss_onesample < prev_loss_onesample:
                     path = f"{hp.training.dir_chkpt}/tier{tier}_{timestamp}_loss{loss_onesample}.pt"
                     torch.save(obj={'dataset': hp.data.dataset,
-                                    'tier': tier,
+                                    'tier_idx': tier,
                                     'hp': hp,
                                     'epoch': epoch,
                                     'iterations': i,
                                     'total_iterations': total_iterations,
-                                    'model': model.state_dict(),
+                                    'tier': model.state_dict(),
                                     'optimizer': optimizer.state_dict()}, f=path)
                     logger.info(f"Model saved to: {path}")
                 prev_loss_onesample = loss_onesample
@@ -252,12 +252,12 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
         # After finishing training: save model, hyperparameters and total loss
         path = f"{hp.training.dir_chkpt}/tier{tier}_{timestamp}_final.pt"
         torch.save(obj={'dataset': hp.data.dataset,
-                        'tier': tier,
+                        'tier_idx': tier,
                         'hp': hp,
                         'epoch': -1,
                         'iterations': -1,
                         'total_iterations': total_iterations,
-                        'model': model.state_dict(),
+                        'tier': model.state_dict(),
                         'optimizer': optimizer.state_dict()}, f=path)
         logger.info(f"Model saved to: {path}")
         # TODO: instead of logging loss after training, implement some kind of evaluation of the
@@ -342,7 +342,7 @@ def setup_training(args: argparse.Namespace) -> None:
     # 1. Read hyperparameters from file
     hp = HParams.from_yaml(args.path_config)
     # check if GPU available and add it to parameters
-    hp["training"]["device"] = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    hp["device"] = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     # 2. Create extension of the architecture of the model and timestamp for this run (use to
     # identify folders and files created for this run)
@@ -375,7 +375,7 @@ def setup_training(args: argparse.Namespace) -> None:
     logger = logging.getLogger()
 
     # 5. Show device that will be used for training: CPU or GPU
-    logger.info(f"Device for training: {hp.training.device}")
+    logger.info(f"Device for training: {hp.device}")
 
     # 6. Start training of the model (or a single tier, depending on args)
     train_model(args, hp, extension_architecture, timestamp, logger)

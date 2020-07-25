@@ -25,6 +25,7 @@ For more information, see notebooks/08_MelNet.ipynb
     - which proceeds through each frame from low to high frequency
 """
 import logging
+from pathlib import Path
 from typing import List, Tuple
 
 from torch import Tensor
@@ -34,6 +35,7 @@ import torch.nn as nn
 from src.model.Tier import Tier
 from src.model.GMM import sample_gmm_batch
 from src.utils.hparams import HParams
+import src.utils.tierutil as tierutil
 
 
 class MelNet(nn.Module):
@@ -81,7 +83,10 @@ class MelNet(nn.Module):
                                          n_layers=layers[tier_idx],
                                          hidden_size=hidden_size,
                                          gmm_size=gmm_size,
-                                         freq=freq)
+                                         # Calculate size of FREQ dimension for this tier
+                                         freq=tierutil.get_size_freqdim_of_tier(n_mels=self.freq,
+                                                                                n_tiers=self.n_tiers,
+                                                                                tier=tier_idx))
                                     for tier_idx in range(n_tiers)])
 
     def forward(self, tier_idx: int, spectrogram: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
@@ -109,7 +114,7 @@ class MelNet(nn.Module):
         Generates n_samples of audio of the given length.
 
         Args:
-            hp (HParams): parameters. Parameters needed are hp.training.device
+            hp (HParams): parameters. Parameters needed are hp.device
             logger (logging.Logger):
             n_samples (int): amount of samples to generate.
             length (int): length of the samples to generate (in timesteps).
@@ -132,14 +137,15 @@ class MelNet(nn.Module):
             if x is None:
                 # If the spectrogram has not been initialized, we initialized to an initial frame
                 # of all zeros
-                x = torch.zeros((n_samples, self.freq, 1), device=hp.training.device)
+                x = torch.zeros((n_samples, self.freq, 1), device=hp.device)
             else:
                 # If the spectrogram has already been initialized, we have already computed some
                 # frames. We concatenate a new frame initialized to all zeros which will be replaced
                 # pixel by pixel by the new values
                 # We change the shape from [B, FREQ, FRAMES] to [B, FREQ, FRAMES+1] by adding a new
                 # frame
-                x = torch.cat([x, torch.zeros((n_samples, self.freq, 1), device=hp.training.device)], dim=-1)
+                x = torch.cat(
+                    [x, torch.zeros((n_samples, self.freq, 1), device=hp.device)], dim=-1)
 
             # Inside a frame, the spectrogram is generated autoregressively, freq by freq
             for j in range(0, self.freq):
@@ -153,3 +159,33 @@ class MelNet(nn.Module):
                 x[:, j, i] = new_spectrogram[:, j, i]
 
         return x
+
+    def load_tiers(self, checkpoints_path: List[str], logger: logging.Logger) -> None:
+        """
+        Loads the weights of the trained tiers into MelNet.
+
+        Args:
+            checkpoints_path (List[str]): path to the weights of the tiers.
+            logger (logging.Logger):
+        """
+        if len(checkpoints_path) != self.n_tiers:
+            logger.error(f"Number of checkpoints tiers ({len(checkpoints_path)}) is different from "
+                         f"the number of tiers of current model ({self.n_tiers})")
+            raise Exception(
+                f"Number of checkpoints tiers ({len(checkpoints_path)}) is different from "
+                f"the number of tiers of current model ({self.n_tiers})")
+
+        for tier_idx, checkpoint_path in enumerate(checkpoints_path):
+            # Load weights from previously trained tier
+            if not Path(checkpoint_path).exists():
+                logger.error(
+                    f"Path for tier {tier_idx} with weigths {checkpoint_path} does not exist.")
+                raise Exception(
+                    f"Path for tier {tier_idx} with weigths {checkpoint_path} does not exist.")
+
+            logger.info(f"Loading tier {tier_idx} with weights {checkpoint_path}")
+            checkpoint = torch.load(checkpoint_path)
+
+            self.tiers[tier_idx].load_state_dict(checkpoint["tier"])
+
+

@@ -188,11 +188,10 @@ class DelayedStackLayer(nn.Module):
             # Change from [B, 1, FRAMES, HIDDEN_SIZE] to [B*1, FRAMES, HIDDEN_SIZE]
             h_c_prev = h_c_prev.view(-1, FRAMES, HIDDEN_SIZE)
             h_c, _ = self.rnn_c_l(h_c_prev)
-            # Change from [B*1, FRAMES, HIDDEN_SIZE] to [B, 1, FRAMES, HIDDEN_SIZE]
-            h_c = h_c.contiguous().view(B, 1, FRAMES, HIDDEN_SIZE)
-
             # New central stack hidden state according to MelNet formula (11)
             h_c = self.W_c_l(h_c) + h_c_prev
+            # Change from [B*1, FRAMES, HIDDEN_SIZE] to [B, 1, FRAMES, HIDDEN_SIZE]
+            h_c = h_c.contiguous().view(B, 1, FRAMES, HIDDEN_SIZE)
 
         # ---- FREQUENCY-DELAYED STACK COMPUTATION ----
         h_f_in = None

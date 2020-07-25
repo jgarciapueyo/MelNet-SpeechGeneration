@@ -18,6 +18,10 @@ dummy-train:
 train:
 	python src/train.py -p models/params
 
+# performs synthesis
+synthesis:
+	python src/synthesis.py -p models/params/podcast/podcast_v1.yml -c models/params/podcast/synthesis_podcast_v1.yml -t50
+
 # sends the current project to the server (use from local computer)
 send:
 	bash -x utils/ssh/send.sh
