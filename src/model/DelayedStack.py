@@ -105,12 +105,13 @@ class DelayedStackLayer(nn.Module):
         self.W_f_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
 
         # Layer of Centralized Stack composed of a RNN (Section 4.3)
-        self.rnn_c_l = nn.LSTM(input_size=hidden_size,
-                               hidden_size=hidden_size,
-                               num_layers=1,
-                               batch_first=True)
+        if has_central_stack:
+            self.rnn_c_l = nn.LSTM(input_size=hidden_size,
+                                   hidden_size=hidden_size,
+                                   num_layers=1,
+                                   batch_first=True)
 
-        self.W_c_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
+            self.W_c_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
 
     def forward(self, h_t_prev: Tensor, h_f_prev: Tensor, h_c_prev: Tensor) \
             -> Tuple[Tensor, Tensor, Tensor]:
@@ -238,7 +239,8 @@ class DelayedStackLayer0(nn.Module):
         >> h_t, h_f, h_c = l_0(spectrogram)
     """
 
-    def __init__(self, hidden_size: int, has_central_stack: bool, freq: int):
+    def __init__(self, hidden_size: int, has_central_stack: bool, freq: int,
+                 is_conditioned: bool = False, hidden_size_condition: int = None):
         """
         Args:
             hidden_size (int): hidden_size parameter for the hidden_state shape of the RNN.
@@ -251,6 +253,8 @@ class DelayedStackLayer0(nn.Module):
         self.hidden_size = hidden_size
         self.has_central_stack = has_central_stack
         self.freq = freq
+        self.is_conditioned = is_conditioned
+        self.hidden_size_condition = hidden_size_condition
 
         # Layer zero of Time-Delayed Stack composed of a linear transformation (Section 4.1)
         self.W_t_0 = nn.Linear(in_features=1,
@@ -260,17 +264,30 @@ class DelayedStackLayer0(nn.Module):
         self.W_f_0 = nn.Linear(in_features=1,
                                out_features=hidden_size)
 
-        # Layer zero of Centralized Stack composed of a linear transformation (Section 4.3)
-        self.W_c_0 = nn.Linear(in_features=freq,
-                               out_features=hidden_size)
+        if is_conditioned:
+            # Conditioning layer zero of Time-Delayed Stack (Section 4.4)
+            self.W_t_z = nn.Linear(in_features=hidden_size_condition,
+                                   out_features=hidden_size)
+            # Conditioning layer zero of Frequency-Delayed Stack (Section 4.4)
+            self.W_f_z = nn.Linear(in_features=hidden_size_condition,
+                                   out_features=hidden_size)
 
-    def forward(self, spectrogram: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+        # Layer zero of Centralized Stack composed of a linear transformation (Section 4.3)
+        if has_central_stack:
+            self.W_c_0 = nn.Linear(in_features=freq,
+                                   out_features=hidden_size)
+
+    def forward(self, spectrogram: Tensor, condition: Tensor = None) -> Tuple[Tensor, Tensor, Tensor]:
         """Calculates the hidden state for the time-delayed, frequency-delayed and central stack of
         the layer 0 using the spectrogram.
 
         Args:
             spectrogram (Tensor): spectrogram cuurently being generated which is used as input
                                   to the model. Shape: [B, FREQ, FRAMES]
+            condition (Tensor): condition of spectrogram currently being generated.
+                                * If Layer0 of Tier greater than 1, it will be conditioned on
+                                    spectrogram generated from previous tiers.
+                                    Shape: [B, FREQ, FRAMES, HIDDEN_SIZE_CONDITION)
 
         Returns:
             h_t_0 (Tensor): time-delayed hidden state of zero layer.
@@ -286,6 +303,9 @@ class DelayedStackLayer0(nn.Module):
             "Current second dimension of spectrogram (FREQ) and previously declared FREQ " \
             "do not match"
 
+        if self.is_conditioned:
+            assert condition is not None, "Layer is conditioned but no conditioned was given"
+
         # ---- TIME-DELAYED STACK COMPUTATION ----
 
         # To ensure output h^t_ij[l] is only a function of frames which lie in the context x_<ij,
@@ -297,6 +317,10 @@ class DelayedStackLayer0(nn.Module):
         # Time-delayed hidden-state of the layer 0 according to MelNet formula (7)
         h_t_0 = self.W_t_0(x_t_pad)
 
+        if self.is_conditioned:
+            # Time-delayed hidden state of layer 0 if conditioned according to MelNet formula (13)
+            h_t_0 = h_t_0 + self.W_t_z(condition)
+
         # ---- FREQUENCY-DELAYED STACK COMPUTATION
         # To ensure output h^f_ij[l] is only a function of frames which lie in the context x_<ij,
         # the inputs to the frequency-delayed stack are shifted backwards one step along the
@@ -307,6 +331,10 @@ class DelayedStackLayer0(nn.Module):
         x_f_pad = x_f_pad.unsqueeze(-1)
         # Frequency-delayed hidden-state of the layer 0 according to MelNet formula (9)
         h_f_0 = self.W_f_0(x_f_pad)
+
+        if self.is_conditioned:
+            # Frequency-delayed hidden state of layer 0 if conditioned according to formula (14)
+            h_f_0 = h_f_0 + self.W_f_z(condition)
 
         # ---- CENTRALIZED STACK COMPUTATION ----
         h_c_0 = None
