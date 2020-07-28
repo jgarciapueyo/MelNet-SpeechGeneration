@@ -56,15 +56,20 @@ def synthesize(args: argparse.Namespace, hp: HParams, synthesisp: HParams,
 
     # Perform inference
     logger.info("Starting synthesis")
-    spectrogram = melnet.sample(hp=hp, logger=logger, n_samples=1, length=args.timesteps)
+    spectrogram = melnet.sample(hp=hp,
+                                synthesisp=synthesisp,
+                                timestamp=timestamp,
+                                logger=logger,
+                                n_samples=1,
+                                length=args.timesteps)
     logger.info("Synthesis finished")
 
     # Compute spectrogram
     spectrogram = postprocessing(spectrogram, hp)
     logger.info("Spectrogram post processed")
-    T.save_spectrogram(args.output_path + "/" + timestamp, spectrogram, hp)
+    T.save_spectrogram(synthesisp.output_path + "/" + timestamp, spectrogram, hp)
     logger.info("Spectrogram saved as image")
-    torch.save(spectrogram, args.output_path + "/" + timestamp + ".pt")
+    torch.save(spectrogram, synthesisp.output_path + "/" + timestamp + ".pt")
     logger.info("Spectrogram saved as tensor")
     tensorboardwriter.log_synthesis(spectrogram)
     logger.info("Spectrogram saved in Tensorboard")
@@ -99,8 +104,8 @@ def setup_synthesize(args: argparse.Namespace):
     # 3.2 Create directory for the outputs of this run (the same directory will be used for
     #     different runs of a model with same architecture and the difference will be in the weights
     #     of the model)
-    args.output_path = args.output_path + extension_architecture
-    Path(args.output_path).mkdir(parents=True, exist_ok=True)
+    synthesisp.output_path = synthesisp.output_path + extension_architecture
+    Path(synthesisp.output_path).mkdir(parents=True, exist_ok=True)
 
     # 4. Setup general logging (it will use the folder previously created and the filename will be:
     filename = f"{hp.logging.dir_log}/synthesis_{timestamp}"

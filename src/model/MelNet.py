@@ -32,7 +32,7 @@ from torch import Tensor
 import torch
 import torch.nn as nn
 
-from src.model.Tier import Tier
+from src.model.Tier import Tier1, Tier
 from src.model.GMM import sample_gmm_batch
 from src.utils.hparams import HParams
 import src.utils.tierutil as tierutil
@@ -58,6 +58,11 @@ class MelNet(nn.Module):
     previous tiers p(x_g | x_<g ; phi_g). For sampling, the method
     `def sample(self, n_samples: int, length: int) -> Tensor` should be used, which will generate
     n_samples of audio of the given length by following the previous instructions.
+
+    .. Note:
+        MelNet is a model composed of tiers. Each tier is trained individually during the training
+        phase so this class is only used for synthesis calling the method sample(). For this reason
+        there is no method forward() because this class is not intended for training.
     """
 
     def __init__(self, n_tiers: int, layers: List[int], hidden_size: int, gmm_size: int, freq: int):
@@ -77,44 +82,44 @@ class MelNet(nn.Module):
         self.layers = layers
         self.hidden_size = hidden_size
         self.gmm_size = gmm_size
+
+        assert freq >= 2 ** (self.n_tiers / 2), "Size of frequency axis is too small for " \
+                                                "being generated with the number of tiers " \
+                                                "of this model"
         self.freq = freq
 
-        self.tiers = nn.ModuleList([Tier(tier=tier_idx,
-                                         n_layers=layers[tier_idx],
-                                         hidden_size=hidden_size,
-                                         gmm_size=gmm_size,
-                                         # Calculate size of FREQ dimension for this tier
-                                         freq=tierutil.get_size_freqdim_of_tier(n_mels=self.freq,
-                                                                                n_tiers=self.n_tiers,
-                                                                                tier=tier_idx))
-                                    for tier_idx in range(n_tiers)])
+        self.tiers = nn.ModuleList(
+            [Tier1(tier=1,
+                   n_layers=layers[0],
+                   hidden_size=hidden_size,
+                   gmm_size=gmm_size,
+                   # Calculate size of FREQ dimension for this tier
+                   freq=tierutil.get_size_freqdim_of_tier(n_mels=self.freq,
+                                                          n_tiers=self.n_tiers,
+                                                          tier=1))]
+            +
+            [Tier(tier=tier_idx,
+                  n_layers=layers[tier_idx],
+                  hidden_size=hidden_size,
+                  gmm_size=gmm_size,
+                  # Calculate size of FREQ dimension for this tier
+                  freq=tierutil.get_size_freqdim_of_tier(n_mels=self.freq,
+                                                         n_tiers=self.n_tiers,
+                                                         tier=tier_idx + 1))
+             for tier_idx in range(1, n_tiers)]
+        )
 
-    def forward(self, tier_idx: int, spectrogram: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        """
-        Use only for training.
-        Calculates the unconstrained parameters of the GMM of the given tier.
-
-        Args:
-            tier_idx (int): tier used to generate the unconstrained parameters.
-            spectrogram (Tensor): input spectrogram used to generate the unconstrained parameters.
-                                  Effectively, because it is an autoregressive model, it uses this
-                                  previous values of the spectogram to calculate the parameters of
-                                  the next 'pixels'.
-                                  Shape: [B, FREQ, FRAMES]
-
-        Returns:
-            mu_hat (Tensor): means of GMM with k components of tier_idx. Shape: [B, FREQ, FRAMES, K]
-            std_hat (Tensor): std of GMM with k components of tier_idx. Shape: [B, FREQ, FRAMES, K]
-            pi_hat (Tensor): pi of GMM with k components of tier_idx. Shape: [B, FREQ, FRAMES, K]
-        """
-        return self.tiers[tier_idx](spectrogram)
-
-    def sample(self, hp: HParams, logger: logging.Logger, n_samples: int, length: int) -> Tensor:
+    def sample(self, hp: HParams, synthesisp: HParams, timestamp: str, logger: logging.Logger,
+               n_samples: int, length: int) -> Tensor:
         """
         Generates n_samples of audio of the given length.
 
         Args:
             hp (HParams): parameters. Parameters needed are hp.device
+            synthesisp (HParams): parameters for performing the synthesis. Parameters needed are
+                                  synthesisp.output_path to save the spectrogram generated at
+                                  each tier.
+            timestamp (str): information that identifies completely this run (synthesis).
             logger (logging.Logger):
             n_samples (int): amount of samples to generate.
             length (int): length of the samples to generate (in timesteps).
@@ -123,21 +128,26 @@ class MelNet(nn.Module):
             spectrograms (Tensor): samples of audio in spectrogram representation.
                                    Shape: [B=n_samples, FREQ=self.freq, FRAMES=length].
         """
-
-        # Note: When the model contains more tiers, freq and length must be adapted to multiscale
-        # modelling
+        assert length >= 2 ** (
+                self.n_tiers / 2), "Length is too short for being generated with the " \
+                                   "number of tiers of this model."
 
         # Initially, the spectrogram (x) to generate it does not exist.
         x = None
 
         # --- TIER 1 ----
         # The spectrogram is generated autoregressively, frame (length, or timestep) by frame.
-        for i in range(0, length):
-            logger.info(f"Frame {i}/{length}")
+        logger.info(f"Starting Tier 1/{self.n_tiers}")
+        freq_of_tier1 = tierutil.get_size_freqdim_of_tier(n_mels=self.freq, n_tiers=self.n_tiers,
+                                                          tier=1)
+        length_of_tier1 = tierutil.get_size_timedim_of_tier(timesteps=length, n_tiers=self.n_tiers,
+                                                            tier=1)
+        for i in range(0, length_of_tier1):
+            logger.info(f"Tier 1/{self.n_tiers} - Frame {i}/{length_of_tier1}")
             if x is None:
                 # If the spectrogram has not been initialized, we initialized to an initial frame
                 # of all zeros
-                x = torch.zeros((n_samples, self.freq, 1), device=hp.device)
+                x = torch.zeros((n_samples, freq_of_tier1, 1), device=hp.device)
             else:
                 # If the spectrogram has already been initialized, we have already computed some
                 # frames. We concatenate a new frame initialized to all zeros which will be replaced
@@ -145,10 +155,10 @@ class MelNet(nn.Module):
                 # We change the shape from [B, FREQ, FRAMES] to [B, FREQ, FRAMES+1] by adding a new
                 # frame
                 x = torch.cat(
-                    [x, torch.zeros((n_samples, self.freq, 1), device=hp.device)], dim=-1)
+                    [x, torch.zeros((n_samples, freq_of_tier1, 1), device=hp.device)], dim=-1)
 
             # Inside a frame, the spectrogram is generated autoregressively, freq by freq
-            for j in range(0, self.freq):
+            for j in range(0, freq_of_tier1):
                 # we generate the parameters for all the spectrogram (across all samples)
                 mu_hat, std_hat, pi_hat = self.tiers[0](x)
                 # with the parameters we generate the values of the next spectrogram
@@ -157,6 +167,56 @@ class MelNet(nn.Module):
                 # but only use the value of the new pixel that we are generating
                 # (across all samples) since the spectrogram is generated autoregressively
                 x[:, j, i] = new_spectrogram[:, j, i]
+
+        # Save spectrogram generated at tier1
+        torch.save(x, f"{synthesisp.output_path}/{timestamp}_tier1.pt")
+
+        # --- TIER >1 ---
+        for tier_idx in range(2, self.n_tiers + 1):
+            temp_x = None  # temporary spectrogram that will be generated by this tier
+            # The spectrogram is generated autoregressively, frame (length, or timestep) by frame.
+            logger.info(f"Starting Tier {tier_idx}/{self.n_tiers}")
+            freq_of_tierX = tierutil.get_size_freqdim_of_tier(n_mels=self.freq,
+                                                              n_tiers=self.n_tiers,
+                                                              tier=tier_idx)
+            length_of_tierX = tierutil.get_size_timedim_of_tier(timesteps=length,
+                                                                n_tiers=self.n_tiers,
+                                                                tier=tier_idx)
+            for i in range(0, length_of_tierX):
+                logger.info(f"Tier {tier_idx}/{self.n_tiers} - Frame {i}/{length_of_tierX}")
+                if temp_x is None:
+                    # If the spectrogram of this tier has not been initialized, we initialized to an
+                    # initial frame of all zeros
+                    temp_x = torch.zeros((n_samples, freq_of_tierX, 1), device=hp.device)
+                else:
+                    # If the spectrogram of this tier has already been initialized, we have already
+                    # computed some frames. We concatenate a new frame initialized to all zeros
+                    # which will be replaced pixel by pixel by the new values
+                    # We change shape from [B, FREQ, FRAMES] to [B, FREQ, FRAMES+1] by adding a new
+                    # frame
+                    temp_x = torch.cat(
+                        [temp_x, torch.zeros((n_samples, freq_of_tierX, 1), device=hp.device)],
+                        dim=-1)
+
+                # Inside a frame, the spectrogram is generated autoregressively, freq by freq
+                for j in range(0, freq_of_tierX):
+                    # we generate the parameters for all the spectrogram (across all samples)
+                    mu_hat, std_hat, pi_hat = self.tiers[tier_idx - 1](temp_x, x)
+                    # with the parameters we generate the values of the next spectrogram
+                    # (across all samples)
+                    new_spectrogram = sample_gmm_batch(mu_hat, std_hat, pi_hat)
+                    # but only use the value of the new pixel that we are generating
+                    # (across all samples) since the spectrogram is generated autoregressively
+                    temp_x[:, j, i] = new_spectrogram[:, j, i]
+
+            # After generating the spectrogram of this tier, we interleave it to put it together
+            # with the spectrogram generated by previous tiers. In the next iteration, this will
+            # be the input to condition the next tier
+            x = tierutil.interleave(temp_x, x, tier_idx)
+            x = x.to(hp.device)
+            # Save spectrogram generated at tier1
+            torch.save(temp_x, f"{synthesisp.output_path}/{timestamp}_tier{tier_idx}.pt")
+            torch.save(x, f"{synthesisp.output_path}/{timestamp}_tier1-tier{tier_idx}.pt")
 
         return x
 
@@ -187,5 +247,3 @@ class MelNet(nn.Module):
             checkpoint = torch.load(checkpoint_path)
 
             self.tiers[tier_idx].load_state_dict(checkpoint["tier"])
-
-

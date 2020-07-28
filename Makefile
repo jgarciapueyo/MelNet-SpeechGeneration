@@ -16,11 +16,11 @@ dummy-train:
 
 # starts training on MelNet declared in yaml file (intended to use in when training real model)
 train:
-	python src/train.py -p models/params
+	python src/train.py -p models/params/podcast/podcast_v2.yml
 
 # performs synthesis
 synthesis:
-	python src/synthesis.py -p models/params/podcast/podcast_v1.yml -c models/params/podcast/synthesis_podcast_v1.yml -t50
+	python src/synthesis.py -p models/params/podcast/podcast_v2.yml -s models/params/podcast/synthesis_podcast_v2.yml -t200
 
 # sends the current project to the server (use from local computer)
 send:

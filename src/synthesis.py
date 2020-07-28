@@ -18,8 +18,6 @@ if __name__ == '__main__':
                              "The filemodel must contain the path to the weights of the tiers")
     parser.add_argument("-t", "--timesteps", type=int, required=False, default=300,
                         help="Number of frames of spectrogram to synthesize")
-    # TODO: add output_path to synthesis_dataset_vX.yml instead of a command line option
-    parser.add_argument("-o", "--output-path", type=str, required=False, default="out/")
     args = parser.parse_args()
 
     if Path(args.path_config).is_dir():
