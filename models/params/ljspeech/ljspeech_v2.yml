@@ -1,0 +1,67 @@
+# This file contains the parameters for trying training in the server with a medium model with
+# podcast dataset
+
+# (str) identifies the model to be trained and its parameters
+name: 'ljspeech_v1'
+
+# Parameters related with the data pipeline (transforms between different audio representations like
+# audio waveform, spectrogram, melspectrogram, ...).
+audio:
+  # (int): sample rate of the sample audio in Hz
+  sample_rate: 22050
+  # (str) type of spectrogram it will represent: 'linear' for energy, 'power' for power
+  spectrogram_type: 'power'
+  # (int) size of the Fast Fourier Transform
+  n_fft: 1536  # 6 * 256
+  # (int) number of mel channels when transforming to MelSpectrogram
+  mel_channels: 256
+  # (int) length of hop between STFT windows
+  hop_length: 256
+  # (int) window size
+  win_length: 1536  # 6 * 256
+  # (int) reference level (in dB) in spectrogram
+  ref_level_db: 30
+  # (int) minimum level (in dB) in spectrogram
+  min_level_db: -100
+
+# Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
+# See MelNet paper Table 1.
+network:
+  n_tiers: 6
+  layers: [12,5,4,3,2,2]
+  hidden_size: 512
+  gmm_size: 10
+
+# Information related to the folder where the data for training is found and additional information
+# depending on the dataset being used.
+data:
+  dataset: 'ljspeech'
+  path: 'datasets/ljspeech/'
+
+# Parameters related with the training phase (optimizer, learning rate, ...)
+training:
+  optimizer: 'RMSProp'
+  epochs: 2
+  batch_size: 1
+  accumulation_steps: 32
+  #lr: 0.0000010
+  lr: 0.0000030
+  momentum: 0.9
+  # (int) number of workers for loading the data
+  num_workers: 1
+  # (int) iterations between model save
+  save_iterations: 1000
+  # (int) iterations between evaluation
+  evaluation_iterations: 1040  # so it is multiple of accumulation steps / batch_size
+  # (str) path where to save model weights
+  dir_chkpt: 'models/chkpt/'
+
+# Information related to the folder and paths where to save the logs and the model weights during
+# training
+logging:
+  # (str) path where to save the tensorboard logs
+  dir_log_tensorboard: 'logs/tensorboard/'
+  # (str) path where to save other logs
+  dir_log: 'logs/general/'
+  # (int) iterations between logs
+  log_iterations: 50
