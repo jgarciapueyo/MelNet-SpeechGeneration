@@ -1,7 +1,7 @@
-"""
-MelNet complete architecture
+"""MelNet complete model for unconditional speech.
 
-Implementation of the complete MelNet model, composed of Tiers for the multiscale modelling.
+Implementation of the complete MelNet model for unconditional speech, composed of Tiers for
+multiscale modelling.
 
 For more information, see notebooks/08_MelNet.ipynb
 # TODO: finish explanation in notebooks/08_MelNet.ipynb
@@ -26,16 +26,16 @@ For more information, see notebooks/08_MelNet.ipynb
 """
 import logging
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
-from torch import Tensor
 import torch
 import torch.nn as nn
 
-from src.model.Tier import Tier1, Tier
+# from src.model.Tier import Tier1, Tier
+from src.model.TierCheckpoint import Tier1, Tier
 from src.model.GMM import sample_gmm_batch
+from src.utils import tierutil
 from src.utils.hparams import HParams
-import src.utils.tierutil as tierutil
 
 
 class MelNet(nn.Module):
@@ -48,16 +48,16 @@ class MelNet(nn.Module):
 
     For this reason, each tier can be trained independently by partitioning the original spectrogram
     into the corresponding tiers, as explained in Section 6.1. For training, the method
-    `forward(self, tier_idx: int, spectrogram) -> Tuple[Tensor, Tensor, Tensor]` should be used,
-    which calls a single tier and generates the corresponding parameters of the GMM to, later,
-    calculate the negative log-likelihood of the generated parameters with respect to the real data
-    (spectrogram) using src.model.GMM.GMMLoss.
+    `forward(self, tier_idx: int, spectrogram) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]`
+    should be used, which calls a single tier and generates the corresponding parameters of the GMM
+    to, later, calculate the negative log-likelihood of the generated parameters with respect to the
+    real data (spectrogram) using src.model.GMM.GMMLoss.
 
     Sampling, as explained in Section 6.2, should be done recursively. First, by sampling
     unconditionally from the first tier p(x_1; phi_1), and subsequently sampling conditionally on
     previous tiers p(x_g | x_<g ; phi_g). For sampling, the method
-    `def sample(self, n_samples: int, length: int) -> Tensor` should be used, which will generate
-    n_samples of audio of the given length by following the previous instructions.
+    `def sample(self, n_samples: int, length: int) -> torch.Tensor` should be used, which will
+    generate n_samples of audio of the given length by following the previous instructions.
 
     .. Note:
         MelNet is a model composed of tiers. Each tier is trained individually during the training
@@ -110,7 +110,7 @@ class MelNet(nn.Module):
         )
 
     def sample(self, hp: HParams, synthesisp: HParams, timestamp: str, logger: logging.Logger,
-               n_samples: int, length: int) -> Tensor:
+               n_samples: int, length: int) -> torch.Tensor:
         """
         Generates n_samples of audio of the given length.
 
@@ -125,7 +125,7 @@ class MelNet(nn.Module):
             length (int): length of the samples to generate (in timesteps).
 
         Returns:
-            spectrograms (Tensor): samples of audio in spectrogram representation.
+            spectrograms (torch.Tensor): samples of audio in spectrogram representation.
                                    Shape: [B=n_samples, FREQ=self.freq, FRAMES=length].
         """
         assert length >= 2 ** (
@@ -221,29 +221,28 @@ class MelNet(nn.Module):
         return x
 
     def load_tiers(self, checkpoints_path: List[str], logger: logging.Logger) -> None:
-        """
-        Loads the weights of the trained tiers into MelNet.
+        """Loads the weights of the trained tiers into MelNet.
 
         Args:
             checkpoints_path (List[str]): path to the weights of the tiers.
             logger (logging.Logger):
         """
-        if len(checkpoints_path) != self.n_tiers:
-            logger.error(f"Number of checkpoints tiers ({len(checkpoints_path)}) is different from "
-                         f"the number of tiers of current model ({self.n_tiers})")
-            raise Exception(
-                f"Number of checkpoints tiers ({len(checkpoints_path)}) is different from "
-                f"the number of tiers of current model ({self.n_tiers})")
+        # if len(checkpoints_path) != self.n_tiers:
+        #    logger.error(f"Number of checkpoints tiers ({len(checkpoints_path)}) is different "
+        #                 f"from the number of tiers of current model ({self.n_tiers})")
+        #    raise Exception(
+        #        f"Number of checkpoints tiers ({len(checkpoints_path)}) is different from "
+        #        f"the number of tiers of current model ({self.n_tiers})")
 
         for tier_idx, checkpoint_path in enumerate(checkpoints_path):
             # Load weights from previously trained tier
             if not Path(checkpoint_path).exists():
                 logger.error(
-                    f"Path for tier {tier_idx} with weigths {checkpoint_path} does not exist.")
+                    f"Path for tier {tier_idx+1} with weigths {checkpoint_path} does not exist.")
                 raise Exception(
-                    f"Path for tier {tier_idx} with weigths {checkpoint_path} does not exist.")
+                    f"Path for tier {tier_idx+1} with weigths {checkpoint_path} does not exist.")
 
-            logger.info(f"Loading tier {tier_idx} with weights {checkpoint_path}")
+            logger.info(f"Loading tier {tier_idx+1} with weights {checkpoint_path}")
             checkpoint = torch.load(checkpoint_path)
 
             self.tiers[tier_idx].load_state_dict(checkpoint["tier"])
