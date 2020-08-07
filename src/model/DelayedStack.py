@@ -236,18 +236,28 @@ class DelayedStackLayer(nn.Module):
         #                                             requires_grad=True)
         # self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
         #                                           requires_grad=True)
-        self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                     requires_grad=True)
-        self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                   requires_grad=True)
-        self.hidden_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                     requires_grad=True)
-        self.cell_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                   requires_grad=True)
-        self.hidden_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                      requires_grad=True)
-        self.cell_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                    requires_grad=True)
+        # self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
+        #                                             requires_grad=True)
+        # self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
+        #                                           requires_grad=True)
+        # self.hidden_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+        #                                             requires_grad=True)
+        # self.cell_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+        #                                           requires_grad=True)
+        # self.hidden_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+        #                                              requires_grad=True)
+        # self.cell_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+        #                                            requires_grad=True)
+        # self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
+        #                                             requires_grad=True)
+        # self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
+        #                                           requires_grad=True)
+        self.hidden_state_forwardtime = torch.zeros(1, 1, hidden_size, device="cuda")
+        self.cell_state_forwardtime = torch.zeros(1, 1, hidden_size, device="cuda")
+        self.hidden_state_forwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+        self.cell_state_forwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+        self.hidden_state_backwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+        self.cell_state_backwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
 
         # in_features=hidden_size*3 because in_features is the concatenation of the
         # three RNN hidden states
@@ -260,8 +270,10 @@ class DelayedStackLayer(nn.Module):
                                num_layers=1,
                                batch_first=True)
         # Initial values of recurrent states (are trainable parameters as stated in Table 1)
-        self.hidden_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
-        self.cell_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
+        # self.hidden_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
+        # self.cell_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
+        self.hidden_state_freq = torch.zeros(1, 1, hidden_size, device="cuda")
+        self.cell_state_freq = torch.zeros(1, 1, hidden_size, device="cuda")
 
         self.W_f_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
 
@@ -272,10 +284,12 @@ class DelayedStackLayer(nn.Module):
                                    num_layers=1,
                                    batch_first=True)
             # Initial values of recurrent states (are trainable parameters as stated in Table 1)
-            self.hidden_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                     requires_grad=True)
-            self.cell_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
-                                                   requires_grad=True)
+            # self.hidden_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
+            #                                         requires_grad=True)
+            # self.cell_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
+            #                                       requires_grad=True)
+            self.hidden_state_central = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.cell_state_central = torch.zeros(1, 1, hidden_size, device="cuda")
 
             self.W_c_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
 
