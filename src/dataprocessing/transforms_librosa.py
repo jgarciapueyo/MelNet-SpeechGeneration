@@ -1,4 +1,16 @@
-from typing import List
+"""Functions similar to src.dataprocessing.transforms implemented with librosa library (instead of
+PyTorch).
+
+IMPORTANT: this module was built to compare results between PyTorch implementation and librosa
+implementation transforming audio representations. However, it has not been used in any part of the
+project. For more information, see notebooks:
+ * notebooks/00_dataprocessing.ipynb (using PyTorch implementation and Librispeech dataset)
+ * notebooks/01_dataprocessing_librosa.ipynb (using librosa implementation and Librispeech dataset)
+ * notebooks/02_dataprocessing-podcast_dataset.ipynb (using PyTorch implementation and Podcast
+                                                      dataset)
+ * notebooks/03_dataprocessing_librosa-podcast_dataset.ipynb (using librosa implementation and
+                                                              Podcast dataset)
+"""
 
 import librosa
 import librosa.display
@@ -8,6 +20,7 @@ import torch
 from torch import Tensor
 
 from src.utils.hparams import HParams
+
 
 # TODO: improve documentation in every function
 
@@ -80,10 +93,11 @@ def melspectrogram_to_wave(melspectrogram: Tensor, hp: HParams, n_iter: int = 32
                                              power=hp.power,
                                              n_iter=n_iter))
 
+
 def amplitude_to_db(spectrogram: Tensor, hp: HParams):
     r"""Wrapper around librosa.core.amplitude_to_db()."""
     # Convert to power spectrogram if we were working with magnitude (energy) spectrogram
-    S = spectrogram if hp.power == 2 else spectrogram**2
+    S = spectrogram if hp.power == 2 else spectrogram ** 2
 
     return torch.from_numpy(librosa.core.power_to_db(S=S.numpy()))
 
