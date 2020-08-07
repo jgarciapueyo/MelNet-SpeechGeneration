@@ -20,6 +20,7 @@ import torch
 from src.dataprocessing import transforms as T
 from src.dataprocessing.audio_normalizing import preprocessing, postprocessing
 from src.model.MelNet import MelNet
+#from src.model.MelNetUpsampling import MelNet
 from src.utils.hparams import HParams
 from src.utils.logging import TensorboardWriter
 
@@ -53,15 +54,17 @@ def synthesize(args: argparse.Namespace, hp: HParams, synthesisp: HParams,
     melnet = melnet.to(hp.device)
     # Load weights from previously trained tiers
     melnet.load_tiers(synthesisp.checkpoints_path, logger)
+    melnet.eval()
 
     # Perform inference
     logger.info("Starting synthesis")
-    spectrogram = melnet.sample(hp=hp,
-                                synthesisp=synthesisp,
-                                timestamp=timestamp,
-                                logger=logger,
-                                n_samples=1,
-                                length=args.timesteps)
+    with torch.no_grad():
+        spectrogram = melnet.sample(hp=hp,
+                                    synthesisp=synthesisp,
+                                    timestamp=timestamp,
+                                    logger=logger,
+                                    n_samples=1,
+                                    length=args.timesteps)
     logger.info("Synthesis finished")
 
     # Compute spectrogram

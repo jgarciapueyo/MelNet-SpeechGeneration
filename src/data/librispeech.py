@@ -15,11 +15,11 @@ Example::
 """
 import argparse
 
-from torch.utils.data import Dataset
+import torch.utils.data
 import torchaudio
 
 
-def download_data(root: str, url: str) -> Dataset:
+def download_data(root: str, url: str) -> torch.utils.data.Dataset:
     r"""Wrapper to download LIBRISPEECH dataset. Each item is a tuple of the form:
     waveform, sample_rate, utterance, speaker_id, chapter_id, utterance_id
 
@@ -37,7 +37,8 @@ def download_data(root: str, url: str) -> Dataset:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-r', '--root', type=str, required=False, default='../../datasets',
+    parser.add_argument('-r', '--root', type=str, required=False,
+                        default='../../datasets/librispeech',
                         help="root directory where to download the dataset")
     parser.add_argument('-u', '--url', type=str, required=False, default='dev-clean',
                         help="version of the dataset to download. \

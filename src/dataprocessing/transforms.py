@@ -106,7 +106,7 @@ def spectrogram_to_melspectrogram(spectrogram: Tensor, hp: HParams) -> Tensor:
     return melscale(spectrogram)
 
 
-def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams, n_iter: int = 100000) -> Tensor:
+def melspectrogram_to_spectrogram(melspectrogram: Tensor, hp: HParams, n_iter: int = 1000) -> Tensor:
     r"""Wrapper around torchaudio.transforms.InverseMelScale().
 
     Args:
