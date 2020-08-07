@@ -10,7 +10,7 @@ Example::
     >> setup_synthesize(args)
 """
 from datetime import datetime
-from argparse import Namespace
+import argparse
 import logging
 from pathlib import Path
 
@@ -20,24 +20,30 @@ import torch
 from src.dataprocessing import transforms as T
 from src.dataprocessing.audio_normalizing import preprocessing, postprocessing
 from src.model.MelNet import MelNet
+#from src.model.MelNetUpsampling import MelNet
 from src.utils.hparams import HParams
 from src.utils.logging import TensorboardWriter
 
 
-def synthesize(hp: HParams, args: Namespace, extension_run: str,
-               tensorboardwriter: TensorboardWriter, logger: logging.Logger):
+def synthesize(args: argparse.Namespace, hp: HParams, synthesisp: HParams,
+               extension_architecture: str, timestamp: str, tensorboardwriter: TensorboardWriter,
+               logger: logging.Logger) -> None:
     """
     Synthesizes one or several samples.
 
     Args:
-        hp (HParams): hyperparameters for the model and other parameters (audio, network
-                      architecture, ...)
-        args (argparse.Namespace): input parameters (path to HParams file, ...)
-        extension_run (str): information about the run (synthesis) to identify the logs
-                             and the output
-        tensorboardwriter (TensorboardWriter): interface to save logs to tensorboard
-        logger (logging.Logger): log general information about the synthesis
-
+        args (argparse.Namespace): parameters to set up the training. At least, args must contain:
+                                   args = {"path_config": ...,
+                                           "tier": ...,
+                                           "checkpoint_path": ...}
+        hp (HParams): hyperparameters for the model and other parameters (training, dataset, ...)
+        synthesisp (HParams): parameters for doing synthesis. It contains the path to the weights of
+                              the trained tiers.
+        extension_architecture (str): information about the network's architecture of this run
+                                      (synthesis) to identify the logs and output of the model.
+        timestamp (str): information that identifies completely this run (synthesis).
+        tensorboardwriter (TensorboardWriter): to log information about training to tensorboard.
+        logger (logging.Logger): to log general information about the training of the model.
     """
     # Setup model
     melnet = MelNet(n_tiers=hp.network.n_tiers,
@@ -45,88 +51,89 @@ def synthesize(hp: HParams, args: Namespace, extension_run: str,
                     hidden_size=hp.network.hidden_size,
                     gmm_size=hp.network.gmm_size,
                     freq=hp.audio.mel_channels)
-    melnet = melnet.to(hp.training.device)
-
-    # Load weights from previously trained model
-    if not Path(args.checkpoint_path).exists():
-        logger.error(f"Path for model weigths {args.checkpoint_path} does not exist.")
-        raise Exception(f"Path for model weigths {args.checkpoint_path} does not exist.")
-
-    logger.info(f"Synthesis with weights from: {args.checkpoint_path}")
-    checkpoint = torch.load(args.checkpoint_path)
-    hp_chkpt = checkpoint["hp"]
-
-    if hp_chkpt.audio != hp.audio:
-        logger.warning("New params for audio are different from checkpoint. "
-                       "It will use new params.")
-
-    if hp_chkpt.network != hp.network:
-        logger.error("New params for network structure are different from checkpoint.")
-        raise Exception("New params for network structure are different from checkpoint.")
-
-    melnet.load_state_dict(checkpoint["model"])
+    melnet = melnet.to(hp.device)
+    # Load weights from previously trained tiers
+    melnet.load_tiers(synthesisp.checkpoints_path, logger)
+    melnet.eval()
 
     # Perform inference
     logger.info("Starting synthesis")
-    spectrogram = melnet.sample(hp=hp, logger=logger, n_samples=1, length=args.timesteps)
+    with torch.no_grad():
+        spectrogram = melnet.sample(hp=hp,
+                                    synthesisp=synthesisp,
+                                    timestamp=timestamp,
+                                    logger=logger,
+                                    n_samples=1,
+                                    length=args.timesteps)
     logger.info("Synthesis finished")
 
     # Compute spectrogram
     spectrogram = postprocessing(spectrogram, hp)
     logger.info("Spectrogram post processed")
-    T.save_spectrogram(args.output_path+extension_run, spectrogram, hp)
+    T.save_spectrogram(synthesisp.output_path + "/" + timestamp, spectrogram, hp)
     logger.info("Spectrogram saved as image")
-    torch.save(spectrogram, args.output_path+extension_run+".pt")
-    logger.info("Spectrogram saves as tensor")
+    torch.save(spectrogram, synthesisp.output_path + "/" + timestamp + ".pt")
+    logger.info("Spectrogram saved as tensor")
     tensorboardwriter.log_synthesis(spectrogram)
     logger.info("Spectrogram saved in Tensorboard")
 
 
-def setup_synthesize(args: Namespace):
+def setup_synthesize(args: argparse.Namespace):
     """
     Sets up synthesis with the parameters specified in args and the path to the weights of the model
 
     Args:
         args (argparse.Namespace): parameters to set up the synthesis.
     """
-    # read parameters from file
+    # 1. Read hyperparameters from file
     hp = HParams.from_yaml(args.path_config)
+    synthesisp = HParams.from_yaml(args.path_synthesis)
     # check if GPU available and add it to parameters
-    hp["training"]["device"] = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    hp["device"] = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    # create extension for this run
-    # format: f(params_file)_t(n_tiers)_l(n_layers)_hd(hidden_size)_gmm(gmm_size)-time.
-    extension_run = f"d{hp.name}_t{hp.network.n_tiers}_" \
-                    f"l{'.'.join(map(str, hp.network.layers))}_" \
-                    f"hd{hp.network.hidden_size}_gmm{hp.network.gmm_size}_" \
-                    f"{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    # 2. Create extension of the architecture of the model and timestamp for this run (use to
+    # identify folders and files created for this run)
+    # format: f(params_file)_t(n_tiers)_l(n_layers)_hd(hidden_size)_gmm(gmm_size).
+    extension_architecture = f"d{hp.name}_t{hp.network.n_tiers}_" \
+                             f"l{'.'.join(map(str, hp.network.layers))}_" \
+                             f"hd{hp.network.hidden_size}_gmm{hp.network.gmm_size}"
+    timestamp = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 
-    # create directories for logging if they do not exist
-    # create general log directory
+    # 3 Create directories for saving logs and output if they do not exist
+    # 3.1 Create general log directory for this run (the same directory will be used for different
+    #     runs of a model with same architecture and the difference will be in the file stored)
+    hp["logging"]["dir_log"] = hp.logging.dir_log + extension_architecture
     Path(hp.logging.dir_log).mkdir(parents=True, exist_ok=True)
-    # create tensorboard logs directory
-    # tensorboard requires a different folder for each run of the model so we add the extension for
-    # this run
-    hp["logging"]["dir_log_tensorboard"] = hp.logging.dir_log_tensorboard + extension_run
-    Path(hp.logging.dir_log_tensorboard).mkdir(parents=True, exist_ok=True)
-    # create directory for output
-    Path(args.output_path).mkdir(parents=True, exist_ok=True)
+    # 3.2 Create directory for the outputs of this run (the same directory will be used for
+    #     different runs of a model with same architecture and the difference will be in the weights
+    #     of the model)
+    synthesisp.output_path = synthesisp.output_path + extension_architecture
+    Path(synthesisp.output_path).mkdir(parents=True, exist_ok=True)
 
-    # setup general logging
+    # 4. Setup general logging (it will use the folder previously created and the filename will be:
+    filename = f"{hp.logging.dir_log}/synthesis_{timestamp}"
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(filename=hp.logging.dir_log + extension_run + ".log"),
-            # handler to save the log to a file
+            logging.FileHandler(filename=filename),  # handler to save the log to a file
             logging.StreamHandler()  # handler to output the log to the terminal
         ])
     logger = logging.getLogger()
-    logger.info(f"Device for synthesis: {hp.training.device}")
 
-    # setup tensorboard logging
-    tensorboardwriter = TensorboardWriter(hp)
+    # 5. Show device that will be used for training: CPU or GPU
+    logger.info(f"Device for training: {hp.device}")
 
-    synthesize(hp, args, extension_run, tensorboardwriter, logger)
+    # 6. Setup tensorboard logging
+    # 6.1 Create tensorboard logs directory (tensorboard requires a different folder for
+    # each run of the model, in this case every run to train a tier) so we add the extension
+    # of the network's architecture of this run and the timestamp to identify it completely
+    tensorboard_dir = hp.logging.dir_log_tensorboard + extension_architecture \
+                      + f"synthesis_{timestamp}"
+    Path(tensorboard_dir).mkdir(parents=True, exist_ok=True)
+    # 2.2 Create tensorboard writer
+    tensorboardwriter = TensorboardWriter(hp, tensorboard_dir)
+
+    synthesize(args, hp, synthesisp, extension_architecture, timestamp, tensorboardwriter, logger)
 
     tensorboardwriter.close()

@@ -41,7 +41,7 @@ class HParams(AttrDict):
             # Read parameters from yaml file
             hparams = cls(yaml.safe_load(yaml_file))
             # Update parameters with device to do the calculations on the GPU or CPU
-            hparams["training"]["device"] = torch.device(
+            hparams["device"] = torch.device(
                 'cuda:0' if torch.cuda.is_available() else 'cpu')
             return hparams
 

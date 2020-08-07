@@ -1,8 +1,15 @@
 """This module contains the functions needed to train a complete MelNet model or a single tier.
 
-It only needs the information of where the hyperparameters yaml file is (HParams). It will train the
+It only needs the information where the hyperparameters yaml file is (HParams). It will train the
 model, save it and log the training, all depending on the values specified in the hyperparameters
 file.
+
+In MelNet paper (Table 1), they explain the batch size for training. However, this batch size is too
+big depending on the memory of the GPU. To be able to simulate this, we can use gradient
+accumulation which consists on splitting the batch of samples into several mini-batches of samples
+that will be run sequentially and then update the model (after having run all the mini-batches).
+To learn more see:
+https://medium.com/huggingface/training-larger-batches-practical-tips-on-1-gpu-multi-gpu-distributed-setups-ec88c3e51255
 
 Example::
     >> args = ... (dict with the path to the hyperparameters yaml file and, optionally the path
@@ -23,8 +30,9 @@ from src.data import collatedata, librispeech, ljspeech, podcast
 from src.dataprocessing import transforms
 from src.dataprocessing import audio_normalizing
 from src.model.GMM import GMMLoss
-from src.model.Tier import Tier1, Tier
+from src.model.TierCheckpoint import Tier1, Tier
 from src.utils import tierutil
+# from src.utils import gpumemory
 from src.utils.eval import evaluation
 from src.utils.hparams import HParams
 from src.utils.logging import TensorboardWriter
@@ -48,17 +56,17 @@ def get_dataloader(hp: HParams) \
                                   text_file=hp.data.text_file)
         length = len(dataset)
         train_length = int(0.9 * length)
-        train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_length,
-                                                                              length - train_length])
+        train_data, test_data = torch.utils.data.random_split(dataset, [train_length,
+                                                                        length - train_length])
 
         # https://towardsdatascience.com/7-tips-for-squeezing-maximum-performance-from-pytorch-ca4a40951259
-        train_dataloader = torch.utils.data.DataLoader(dataset=train_dataset,
+        train_dataloader = torch.utils.data.DataLoader(dataset=train_data,
                                                        batch_size=hp.training.batch_size,
                                                        shuffle=False,
                                                        num_workers=hp.training.num_workers,
                                                        collate_fn=collatedata.AudioCollatePodcast(),
                                                        pin_memory=True)
-        test_dataloader = torch.utils.data.DataLoader(dataset=test_dataset,
+        test_dataloader = torch.utils.data.DataLoader(dataset=test_data,
                                                       batch_size=hp.training.batch_size,
                                                       shuffle=False,
                                                       num_workers=hp.training.num_workers,
@@ -71,15 +79,17 @@ def get_dataloader(hp: HParams) \
         dataset = librispeech.download_data(root=hp.data.path, url=hp.data.url)
         length = len(dataset)
         train_length = int(0.9 * length)
-        train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_length,
-                                                                              length - train_length])
-        train_dataloader = torch.utils.data.DataLoader(dataset=train_dataset,
+        train_data, test_data = torch.utils.data.random_split(dataset, [train_length,
+                                                                        length - train_length])
+
+        # https://towardsdatascience.com/7-tips-for-squeezing-maximum-performance-from-pytorch-ca4a40951259
+        train_dataloader = torch.utils.data.DataLoader(dataset=train_data,
                                                        batch_size=hp.training.batch_size,
                                                        shuffle=False,
                                                        num_workers=hp.training.num_workers,
                                                        collate_fn=collatedata.AudioCollatePodcast(),
                                                        pin_memory=True)
-        test_dataloader = torch.utils.data.DataLoader(dataset=test_dataset,
+        test_dataloader = torch.utils.data.DataLoader(dataset=test_data,
                                                       batch_size=hp.training.batch_size,
                                                       shuffle=False,
                                                       num_workers=hp.training.num_workers,
@@ -92,21 +102,22 @@ def get_dataloader(hp: HParams) \
         dataset = ljspeech.download_data(root=hp.data.path)
         length = len(dataset)
         train_length = int(0.9 * length)
-        train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_length,
-                                                                              length - train_length])
-        train_dataloader = torch.utils.data.DataLoader(dataset=train_dataset,
+        train_data, test_data = torch.utils.data.random_split(dataset, [train_length,
+                                                                        length - train_length])
+
+        # https://towardsdatascience.com/7-tips-for-squeezing-maximum-performance-from-pytorch-ca4a40951259
+        train_dataloader = torch.utils.data.DataLoader(dataset=train_data,
                                                        batch_size=hp.training.batch_size,
                                                        shuffle=False,
                                                        num_workers=hp.training.num_workers,
                                                        collate_fn=collatedata.AudioCollatePodcast(),
                                                        pin_memory=True)
-        test_dataloader = torch.utils.data.DataLoader(dataset=test_dataset,
+        test_dataloader = torch.utils.data.DataLoader(dataset=test_data,
                                                       batch_size=hp.training.batch_size,
                                                       shuffle=False,
                                                       num_workers=hp.training.num_workers,
                                                       collate_fn=collatedata.AudioCollatePodcast(),
                                                       pin_memory=True)
-
         return train_dataloader, test_dataloader, int(0.9 * length)
 
     else:
@@ -251,9 +262,11 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
                                                                    tier=tier,
                                                                    n_tiers=hp.network.n_tiers)
             length_spectrogram = input_spectrogram.size(2)
-            # 2. Clear the gradients
-            optimizer.zero_grad()
-            # 3. Compute the model output
+            # if item is too long, we jump to the next one
+            if length_spectrogram > 1000:
+                continue
+
+            # 2. Compute the model output
             if tier == 1:
                 # generation is unconditional so there is only one input
                 mu_hat, std_hat, pi_hat = model(spectrogram=input_spectrogram)
@@ -261,22 +274,31 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
                 # generation is conditional on the spectrogram generated by previous tiers
                 mu_hat, std_hat, pi_hat = model(spectrogram=output_spectrogram,
                                                 spectrogram_prev_tier=input_spectrogram)
-            # 4. Calculate the loss
+            # gpumemory.stat_cuda("Forward")
+            # 3. Calculate the loss
             loss = criterion(mu=mu_hat, std=std_hat, pi=pi_hat, target=output_spectrogram)
+            # gpumemory.stat_cuda("Loss")
             del spectrogram
             del mu_hat, std_hat, pi_hat
 
-            # 4.1 Check if loss has exploded
+            # 3.1 Check if loss has exploded
             if torch.isnan(loss) or torch.isinf(loss):
                 error_msg = f"Loss exploded at Epoch: {epoch}/{hp.training.epochs} - " \
                             f"Iteration: {i * hp.training.batch_size}/{num_samples}"
                 logger.error(error_msg)
                 raise Exception(error_msg)
 
-            # 5. Perform backpropagation
+            # 4. Compute gradients
             loss_cpu = loss.item()
+            loss = loss / hp.training.accumulation_steps
             loss.backward()
-            optimizer.step()
+
+            # 5. Perform backpropagation (using gradient accumulation so efective batch size is the
+            # same as in the paper)
+            if (total_iterations + 1) % (
+                    hp.training.accumulation_steps / hp.training.batch_size) == 0:
+                optimizer.step()
+                model.zero_grad()
 
             # 6. Logging and saving model
             loss_oneframe = loss_cpu / (length_spectrogram * hp.training.batch_size)
@@ -318,7 +340,7 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
             total_iterations += 1
 
         # After finishing training: save model, hyperparameters and total loss
-        path = f"{hp.training.dir_chkpt}/tier{tier}_{timestamp}_final.pt"
+        path = f"{hp.training.dir_chkpt}/tier{tier}_{timestamp}_epoch{epoch}_final.pt"
         torch.save(obj={'dataset': hp.data.dataset,
                         'tier_idx': tier,
                         'hp': hp,
@@ -359,8 +381,8 @@ def train_model(args: argparse.Namespace, hp: HParams, extension_architecture: s
         # 2.1 Create tensorboard logs directory (tensorboard requires a different folder for each
         # run of the model, in this case every run to train a tier) so we add the extension of the
         # network's architecture of this run and the timestamp to identify it completely
-        tensorboard_dir = f"{hp.logging.dir_log_tensorboard}{extension_architecture}_" \
-                          f"{timestamp}_tier{args.tier}"
+        tensorboard_dir = f"{hp.logging.dir_log_tensorboard}{extension_architecture}" \
+                          f"_{timestamp}_tier{args.tier}"
         Path(tensorboard_dir).mkdir(parents=True, exist_ok=True)
         # 2.2 Create tensorboard writer
         tensorboardwriter = TensorboardWriter(hp, tensorboard_dir)

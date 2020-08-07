@@ -25,6 +25,12 @@ def split(spectrogram: Tensor, tier: int, n_tiers: int) -> Tuple[Tensor, Tensor]
         x_<g, x_g (Tensor): both with shape [B, FREQ/2, FRAMES] if g is even or [B, FREQ, FRAMES/2]
                             if g is odd. Note: order is inverted with respect the formula.
     """
+    B, FREQ, FRAMES = spectrogram.shape
+    # if size of FREQ axis or FRAMES axis is odd, we make it even
+    FREQ = FREQ if FREQ % 2 == 0 else FREQ - 1
+    FRAMES = FRAMES if FRAMES % 2 == 0 else FRAMES - 1
+    spectrogram = spectrogram[:, :FREQ, :FRAMES]
+
     tiers = list()
 
     for i in range(n_tiers, max(0, tier - 1), -1):
@@ -64,9 +70,19 @@ def interleave(x_g: Tensor, x_lg: Tensor, tier: int) -> Tensor:
         x_<g+1 (Tensor): tensor after interleaving. Shape: [B, FREQ*2, FRAMES] if tier is even or
                          [B, FREQ, FRAMES*2] if tier is odd.
     """
-    assert x_g.shape == x_lg.shape
+    B_x_g, FREQ_x_g, FRAMES_x_g = x_g.shape
+    B_x_lg, FREQ_x_lg, FRAMES_x_lg = x_lg.shape
 
-    B, FREQ, FRAMES = x_g.shape
+    assert B_x_g == B_x_lg, f"Shapes are different x_g: {x_g.shape} and x_lg: {x_lg.shape}"
+    # If difference is bigger than one
+    assert abs(
+        FREQ_x_g - FREQ_x_lg) <= 1, f"Shapes are different x_g: {x_g.shape} and x_lg: {x_lg.shape}"
+    assert abs(
+        FRAMES_x_g - FRAMES_x_lg) <= 1, f"Shapes are different x_g: {x_g.shape} and x_lg: {x_lg.shape}"
+
+    B, FREQ, FRAMES = B_x_g, min(FREQ_x_g, FREQ_x_lg), min(FRAMES_x_g, FRAMES_x_lg)
+    x_g = x_g[:, :FREQ, :FRAMES]
+    x_lg = x_lg[:, :FREQ, :FRAMES]
 
     if tier % 2 == 0:
         # interleave along frequency axis
@@ -126,7 +142,7 @@ def get_size_freqdim_of_tier(n_mels: int, n_tiers: int, tier: int) -> int:
 
     if n_tiers % 2 == 0:
         frequency_passes = (n_tiers - tier) // 2 + 1  # + 1 because n_tiers is odd and we start
-                                                      # splitting by time axis
+        # splitting by time axis
     else:
         frequency_passes = (n_tiers - (tier - 1)) // 2
     return n_mels // (2 ** frequency_passes)
@@ -159,5 +175,5 @@ def get_size_timedim_of_tier(timesteps: int, n_tiers: int, tier: int) -> int:
         time_passes = (n_tiers - (tier - 1)) // 2
     else:
         time_passes = (n_tiers - tier) // 2 + 1  # + 1 because n_tiers is odd and we start
-                                                 # splitting by time axis
+        # splitting by time axis
     return timesteps // (2 ** time_passes)

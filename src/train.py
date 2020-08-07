@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
-from src.utils.training import setup_training
+from src.utils.training_batch import setup_training
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

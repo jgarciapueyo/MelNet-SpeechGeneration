@@ -2,7 +2,7 @@
 # podcast dataset
 
 # (str) identifies the model to be trained and its parameters
-name: 'podcast_v1'
+name: 'ljspeech_v1'
 
 # Parameters related with the data pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
@@ -20,37 +20,38 @@ audio:
   # (int) window size
   win_length: 1536  # 6 * 256
   # (int) reference level (in dB) in spectrogram
-  ref_level_db: 20
+  ref_level_db: 30
   # (int) minimum level (in dB) in spectrogram
   min_level_db: -100
 
 # Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
 # See MelNet paper Table 1.
 network:
-  n_tiers: 1
-  layers: [8]
-  hidden_size: 128
+  n_tiers: 6
+  layers: [12,5,4,3,2,2]
+  hidden_size: 200
   gmm_size: 10
 
 # Information related to the folder where the data for training is found and additional information
 # depending on the dataset being used.
 data:
-  dataset: 'podcast'
-  path: 'datasets/Podcast/'
-  audio_folder: 'corpus'
-  text_file: 'metadata_TCC.csv'
+  dataset: 'ljspeech'
+  path: 'datasets/ljspeech/'
 
 # Parameters related with the training phase (optimizer, learning rate, ...)
 training:
   optimizer: 'RMSProp'
-  epochs: 1
+  epochs: 2
   batch_size: 1
-  lr: 0.0000010
+  accumulation_steps: 8
+  lr: 0.0000030
   momentum: 0.9
   # (int) number of workers for loading the data
   num_workers: 1
   # (int) iterations between model save
   save_iterations: 1000
+  # (int) iterations between evaluation
+  evaluation_iterations: 1040  # so it is multiple of accumulation steps / batch_size
   # (str) path where to save model weights
   dir_chkpt: 'models/chkpt/'
 
@@ -62,4 +63,4 @@ logging:
   # (str) path where to save other logs
   dir_log: 'logs/general/'
   # (int) iterations between logs
-  log_iterations: 1
+  log_iterations: 50

@@ -1,9 +1,13 @@
-"""Implementation of the Tier.
+"""Implementation of the Tier using checkpointing.
 
 In MelNet, the Tier is the basic unit in the multiscale modelling as explained in Section 6 of the
 MelNet paper. A Tier is composed of Delayed Stack Layers and, at the final layer, a linear
 transformation to the output (hidden state) of the frequency-delayed stack to produce the
 unconstrained parameters: mu_hat, std_hat, pi_hat.
+
+This module uses checkpoint technique to allow for a bigger model as explained in the module
+src.model.ModuleWrapper. To learn more about checkpoint in PyTorch see:
+https://pytorch.org/docs/stable/checkpoint.html.
 
 For more information, see notebooks/07_TierDimensionsAndParameters.ipynb
 # TODO: finish explanation in notebooks/07_TierDimensionsAndParameters.ipynb
@@ -30,13 +34,17 @@ from typing import Tuple
 
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint
 
 from src.model.DelayedStack import DelayedStackLayer0, DelayedStackLayer
 from src.model.FeatureExtraction import FeatureExtractionLayer
+from src.model.ModuleWrapper import ModuleWrapperDelayedStackLayer
+from src.model.ModuleWrapper import ModuleWrapperDelayedStackLayer0
+from src.model.ModuleWrapper import ModuleWrapperFeatureExtraction
 
 
 class Tier1(nn.Module):
-    """First tier of MelNet (multiscale modelling).
+    """First tier of MelNet (multiscale modelling)
 
     This tier contains a list of delayed stack layers as explained in Section 6.
 
@@ -76,16 +84,22 @@ class Tier1(nn.Module):
 
         # Define layers of the tier
         self.layers = nn.ModuleList(
-            [DelayedStackLayer0(hidden_size=hidden_size,
-                                has_central_stack=self.has_central_stack,
-                                freq=freq)]
+            [ModuleWrapperDelayedStackLayer0(
+                DelayedStackLayer0(hidden_size=hidden_size,
+                                   has_central_stack=self.has_central_stack,
+                                   freq=freq)
+            )]
             +
-            [DelayedStackLayer(layer=layer_idx,
-                               hidden_size=hidden_size,
-                               has_central_stack=self.has_central_stack,
-                               freq=freq)
-             for layer_idx in range(1, n_layers)]
+            [ModuleWrapperDelayedStackLayer(
+                DelayedStackLayer(layer=layer_idx,
+                                  hidden_size=hidden_size,
+                                  has_central_stack=self.has_central_stack,
+                                  freq=freq)
+            ) for layer_idx in range(1, n_layers)]
         )
+
+        # Define dummy tensor to trick checkpointing
+        self.dummy_tensor = torch.ones(1, dtype=torch.float32, requires_grad=True)
 
         # Linear transformation from final layer of the frequency-delayed stack to produce
         # unconstrained parameters
@@ -113,14 +127,19 @@ class Tier1(nn.Module):
             pi_hat (torch.Tensor): pi of GMM with k components. Shape: [B, FREQ, FRAMES, K]
         """
         # Hidden states of layer zero for time-delayed, frequency-delayed and centralized stack
-        h_t, h_f, h_c = self.layers[0](spectrogram)
+        # h_t, h_f, h_c = self.layers[0](spectrogram)  #-> call layer0 without checkpointing
+        h_t, h_f, h_c = torch.utils.checkpoint.checkpoint(self.layers[0], self.dummy_tensor,
+                                                          spectrogram, None)
 
         # Hidden states of every layer for time-delayed, frequency-delayed and centralized stack.
         # Shapes of hidden states are always:
         # - Time-delayed stack and Frequency-delayed stack: [B, FREQ, FRAMES, HIDDEN_SIZE]
         # - Centralized stack: [B, 1, FRAMES, HIDDEN_SIZE]
         for layer_idx in range(1, self.n_layers):
-            h_t, h_f, h_c = self.layers[layer_idx](h_t, h_f, h_c)
+            # h_t, h_f, h_c = self.layers[layer_idx](h_t, h_f, h_c)  #-> call layerX
+            #                                                            without checkpointing
+            h_t, h_f, h_c = torch.utils.checkpoint.checkpoint(self.layers[layer_idx],
+                                                              self.dummy_tensor, h_t, h_f, h_c)
 
         # At final layer, a linear transformation is applied to the output of the frequency-delayed
         # stack to produce the unconstrained parameters according to MelNet formula (10)
@@ -179,24 +198,32 @@ class Tier(nn.Module):
 
         # Define layers of the tier
         self.layers = nn.ModuleList(
-            [DelayedStackLayer0(hidden_size=hidden_size,
-                                has_central_stack=self.has_central_stack,
-                                freq=freq,
-                                is_conditioned=True,
-                                hidden_size_condition=hidden_size * 4)]
+            [ModuleWrapperDelayedStackLayer0(
+                DelayedStackLayer0(hidden_size=hidden_size,
+                                   has_central_stack=self.has_central_stack,
+                                   freq=freq,
+                                   is_conditioned=True,
+                                   hidden_size_condition=hidden_size * 4)
+            )]
             +
-            [DelayedStackLayer(layer=layer_idx,
-                               hidden_size=hidden_size,
-                               has_central_stack=self.has_central_stack,
-                               freq=freq)
-             for layer_idx in range(1, n_layers)]
+            [ModuleWrapperDelayedStackLayer(
+                DelayedStackLayer(layer=layer_idx,
+                                  hidden_size=hidden_size,
+                                  has_central_stack=self.has_central_stack,
+                                  freq=freq)
+            ) for layer_idx in range(1, n_layers)]
         )
         # The Layer 0 of this tier (greater than first tier) is conditioned on the output of the
         # feature extraction network. These conditioning features are the concatenation of the
-        # hidden state of 4 one dimensional RNN, that's why the hidden size of the condition has * 4
+        # hidden state of 4 one dimensional RNN, that's why the hidden size of the condition in
+        # DelayedStackLayer0 has * 4
 
         # Define feature extraction network
-        self.feature_extraction = FeatureExtractionLayer(hidden_size)
+        self.feature_extraction = ModuleWrapperFeatureExtraction(
+            FeatureExtractionLayer(hidden_size))
+
+        # Define dummy tensor to trick checkpointing
+        self.dummy_tensor = torch.ones(1, dtype=torch.float32, requires_grad=True)
 
         # Linear transformation from final layer of the frequency-delayed stack to produce
         # unconstrained parameters
@@ -232,19 +259,28 @@ class Tier(nn.Module):
         B, FREQ, FRAMES = spectrogram.size()
         # Calculate conditioning features from the spectrograms generated by the previous tiers.
         # In the paper, these conditioning features are named as z (Section 4.4)
-        conditioning = self.feature_extraction(spectrogram_prev_tier)
+        # conditioning = self.feature_extraction(spectrogram_prev_tier) #-> call feature extraction
+        #                                                                   without checkpointing
+        conditioning = torch.utils.checkpoint.checkpoint(self.feature_extraction, self.dummy_tensor,
+                                                         spectrogram_prev_tier)
         # We only take the condition features until the current frame (there is an error later in
         # the forward pass of DelayedStack0 that broadcast along the time dimension)
         conditioning = conditioning[:, :, :FRAMES]
 
         # Hidden states of layer zero for time-delayed and frequency-delayed stack
-        h_t, h_f = self.layers[0](spectrogram, conditioning)
+        # h_t, h_f, _ = self.layers[0](spectrogram, conditioning)  #-> call layer0
+        #                                                              without checkpointing
+        h_t, h_f = torch.utils.checkpoint.checkpoint(self.layers[0], self.dummy_tensor,
+                                                     spectrogram, conditioning)
 
         # Hidden states of every layer for time-delayed and frequency-delayed.
         # Shapes of hidden states are always:
         # - Time-delayed stack and Frequency-delayed stack: [B, FREQ, FRAMES, HIDDEN_SIZE]
         for layer_idx in range(1, self.n_layers):
-            h_t, h_f = self.layers[layer_idx](h_t, h_f)
+            # h_t, h_f, _ = self.layers[layer_idx](h_t, h_f, None)  #-> call layerX
+            #                                                           without checkpointing
+            h_t, h_f = torch.utils.checkpoint.checkpoint(self.layers[layer_idx],
+                                                         self.dummy_tensor, h_t, h_f)
 
         # At final layer, a linear transformation is applied to the output of the frequency-delayed
         # stack to produce the unconstrained parameters according to MelNet formula (10)
