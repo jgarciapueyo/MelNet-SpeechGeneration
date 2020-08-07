@@ -2,7 +2,7 @@
 # podcast dataset
 
 # (str) identifies the model to be trained and its parameters
-name: 'podcast_v2'
+name: 'podcast_v3'
 
 # Parameters related with the data pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
@@ -27,9 +27,9 @@ audio:
 # Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
 # See MelNet paper Table 1.
 network:
-  n_tiers: 4
-  layers: [12,6,5,4]
-  hidden_size: 8
+  n_tiers: 6
+  layers: [12,5,4,3,2,2]
+  hidden_size: 200
   gmm_size: 10
 
 # Information related to the folder where the data for training is found and additional information
@@ -45,12 +45,15 @@ training:
   optimizer: 'RMSProp'
   epochs: 2
   batch_size: 1
-  lr: 0.0010
+  accumulation_steps: 16
+  lr: 0.000030
   momentum: 0.9
   # (int) number of workers for loading the data
   num_workers: 1
   # (int) iterations between model save
   save_iterations: 1000
+  # (int) iterations between evaluation
+  evaluation_iterations: 1040  # so it is multiple of accumulation steps / batch_size
   # (str) path where to save model weights
   dir_chkpt: 'models/chkpt/'
 

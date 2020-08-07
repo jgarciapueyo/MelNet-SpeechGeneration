@@ -1,14 +1,11 @@
 # (str) identifies the file to do synthesis
-name: 'synthesis_podcast_v2'
+name: 'synthesis_podcast_v3'
 
 # (List[str]) path from project directory to the weights of the tiers of the model to perform
 #           synthesis. The tiers have to be ordered, from the first tier of the model being the
 #           first element in the list to the last tier of the model being the last item in the list
 checkpoints_path: [
-  "redsofa/models/chkpt/dpodcast_v2_t4_l12.6.5.4_hd8_gmm10/tier1_20200728-185912_final.pt",  # First tier
-  "redsofa/models/chkpt/dpodcast_v2_t4_l12.6.5.4_hd8_gmm10/tier2_20200728-185912_final.pt",
-  "redsofa/models/chkpt/dpodcast_v2_t4_l12.6.5.4_hd8_gmm10/tier3_20200728-185912_final.pt",
-  "redsofa/models/chkpt/dpodcast_v2_t4_l12.6.5.4_hd8_gmm10/tier4_20200728-185912_final.pt",
+  "models/chkpt/dpodcast_v3_t6_l12.5.4.3.2.2_hd200_gmm10/tier1_20200731-185350_loss-35.pt",  # First tier
 ]
 
 # (str): path to save the results of synthesis

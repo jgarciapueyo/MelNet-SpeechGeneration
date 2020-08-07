@@ -9,6 +9,7 @@
 --exclude 'models/chkpt/'
 --exclude 'out/'
 --exclude 'redsofa/'
+--exclude 'notebooks/'
 --exclude '.env'
 --exclude 'models/params/podcast/dummymodel_podcast.yml'
 --exclude 'models/params/librispeech/dummymodel_librispeech.yml'

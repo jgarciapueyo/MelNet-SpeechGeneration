@@ -1,0 +1,16 @@
+# (str) identifies the file to do synthesis
+name: 'synthesis_librispeech_v2'
+
+# (List[str]) path from project directory to the weights of the tiers of the model to perform
+#           synthesis. The tiers have to be ordered, from the first tier of the model being the
+#           first element in the list to the last tier of the model being the last item in the list
+checkpoints_path: [
+  "models/chkpt/dlibrispeech_v2_t6_l12.5.4.3.2.2_hd128_gmm8/tier1_20200731-211342_final.pt",  # First tier
+  "models/chkpt/dlibrispeech_v2_t6_l12.5.4.3.2.2_hd128_gmm8/tier2_20200731-211342_final.pt",
+  "models/chkpt/dlibrispeech_v2_t6_l12.5.4.3.2.2_hd128_gmm8/tier3_20200731-211342_final.pt",
+  "models/chkpt/dlibrispeech_v2_t6_l12.5.4.3.2.2_hd128_gmm8/tier4_20200731-211342_final.pt",
+  "models/chkpt/dlibrispeech_v2_t6_l12.5.4.3.2.2_hd128_gmm8/tier5_20200731-211342_final.pt",
+]
+
+# (str): path to save the results of synthesis
+output_path: "out/"

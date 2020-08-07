@@ -49,6 +49,8 @@ training:
   num_workers: 1
   # (int) iterations between model save
   save_iterations: 1000
+  # (int) iterations between evaluation
+  evaluation_iterations: 1000
   # (str) path where to save model weights
   dir_chkpt: 'models/chkpt/'
 
