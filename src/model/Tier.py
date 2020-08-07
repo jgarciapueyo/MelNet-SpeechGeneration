@@ -1,12 +1,9 @@
-"""
-Tier
+"""Implementation of the Tier.
 
-Implementation of the Tier, which is the basic unit in the multiscale modelling as explained in
-Section 6 of the MelNet paper.
-
-A Tier is composed of Delayed Stack Layers and, at the final layer, a linear transformation to the
-output (hidden state) of the frequency-delayed stack to produce the unconstrained parameters:
-mu_hat, std_hat, pi_hat.
+In MelNet, the Tier is the basic unit in the multiscale modelling as explained in Section 6 of the
+MelNet paper. A Tier is composed of Delayed Stack Layers and, at the final layer, a linear
+transformation to the output (hidden state) of the frequency-delayed stack to produce the
+unconstrained parameters: mu_hat, std_hat, pi_hat.
 
 For more information, see notebooks/07_TierDimensionsAndParameters.ipynb
 # TODO: finish explanation in notebooks/07_TierDimensionsAndParameters.ipynb
@@ -31,7 +28,7 @@ For more information, see notebooks/07_TierDimensionsAndParameters.ipynb
 """
 from typing import Tuple
 
-from torch import Tensor
+import torch
 import torch.nn as nn
 
 from src.model.DelayedStack import DelayedStackLayer0, DelayedStackLayer
@@ -39,7 +36,7 @@ from src.model.FeatureExtraction import FeatureExtractionLayer
 
 
 class Tier1(nn.Module):
-    """First tier of MelNet (multiscale modelling)
+    """First tier of MelNet (multiscale modelling).
 
     This tier contains a list of delayed stack layers as explained in Section 6.
 
@@ -85,7 +82,8 @@ class Tier1(nn.Module):
             +
             [DelayedStackLayer(layer=layer_idx,
                                hidden_size=hidden_size,
-                               has_central_stack=self.has_central_stack)
+                               has_central_stack=self.has_central_stack,
+                               freq=freq)
              for layer_idx in range(1, n_layers)]
         )
 
@@ -93,7 +91,7 @@ class Tier1(nn.Module):
         # unconstrained parameters
         self.W_theta = nn.Linear(in_features=hidden_size, out_features=3 * self.k)
 
-    def forward(self, spectrogram: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, spectrogram: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculates the unconstrained parameters of the GMM of the first tier.
         If it is the initial tier, the parameters are generated unconditionally.
@@ -101,7 +99,7 @@ class Tier1(nn.Module):
         previous tiers.
 
         Args:
-            spectrogram (Tensor): input spectrogram.
+            spectrogram (torch.Tensor): input spectrogram.
                                   It will be constructed autoregressively, so in the beginning it
                                   will be artificial values (all 0, random, etc.). Later, the
                                   spectrogram will be built 'pixel' by 'pixel' adding to the initial
@@ -110,9 +108,9 @@ class Tier1(nn.Module):
                                   Shape: [B, FREQ, FRAMES]
 
         Returns:
-            mu_hat (Tensor): means of GMM with k components. Shape: [B, FREQ, FRAMES, K]
-            std_hat (Tensor): std of GMM with k components. Shape: [B, FREQ, FRAMES, K]
-            pi_hat (Tensor): pi of GMM with k components. Shape: [B, FREQ, FRAMES, K]
+            mu_hat (torch.Tensor): means of GMM with k components. Shape: [B, FREQ, FRAMES, K]
+            std_hat (torch.Tensor): std of GMM with k components. Shape: [B, FREQ, FRAMES, K]
+            pi_hat (torch.Tensor): pi of GMM with k components. Shape: [B, FREQ, FRAMES, K]
         """
         # Hidden states of layer zero for time-delayed, frequency-delayed and centralized stack
         h_t, h_f, h_c = self.layers[0](spectrogram)
@@ -189,7 +187,8 @@ class Tier(nn.Module):
             +
             [DelayedStackLayer(layer=layer_idx,
                                hidden_size=hidden_size,
-                               has_central_stack=self.has_central_stack)
+                               has_central_stack=self.has_central_stack,
+                               freq=freq)
              for layer_idx in range(1, n_layers)]
         )
         # The Layer 0 of this tier (greater than first tier) is conditioned on the output of the
@@ -203,8 +202,8 @@ class Tier(nn.Module):
         # unconstrained parameters
         self.W_theta = nn.Linear(in_features=hidden_size, out_features=3 * self.k)
 
-    def forward(self, spectrogram: Tensor, spectrogram_prev_tier: Tensor) \
-            -> Tuple[Tensor, Tensor, Tensor]:
+    def forward(self, spectrogram: torch.Tensor, spectrogram_prev_tier: torch.Tensor) \
+            -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculates the unconstrained parameters of the GMM of a tier.
         If it is the initial tier, the parameters are generated unconditionally.
@@ -212,23 +211,23 @@ class Tier(nn.Module):
         previous tiers.
 
         Args:
-            spectrogram (Tensor): input spectrogram.
+            spectrogram (torch.Tensor): input spectrogram.
                               It will be constructed autoregressively, so in the beginning it
                               will be artificial values (all 0, random, etc.). Later, the
                               spectrogram will be built 'pixel' by 'pixel' adding to the initial
                               spectrogram by feeding the increasing spectrogram to this
                               module (tier).
                               Shape: [B, FREQ, FRAMES]
-            spectrogram_prev_tier (Tensor): spectrogram generated by the previous tiers.
+            spectrogram_prev_tier (torch.Tensor): spectrogram generated by the previous tiers.
                               It is the spectrogram used to condition the unconstrained
                               parameters of the GMM of this tier. In the paper, the spectrogram
                               generated by previous tiers is named x^<g.
                               Shape: [B, FREQ, FRAMES]
 
         Returns:
-        mu_hat (Tensor): means of GMM with k components. Shape: [B, FREQ, FRAMES, K]
-        std_hat (Tensor): std of GMM with k components. Shape: [B, FREQ, FRAMES, K]
-        pi_hat (Tensor): pi of GMM with k components. Shape: [B, FREQ, FRAMES, K]
+        mu_hat (torch.Tensor): means of GMM with k components. Shape: [B, FREQ, FRAMES, K]
+        std_hat (torch.Tensor): std of GMM with k components. Shape: [B, FREQ, FRAMES, K]
+        pi_hat (torch.Tensor): pi of GMM with k components. Shape: [B, FREQ, FRAMES, K]
         """
         B, FREQ, FRAMES = spectrogram.size()
         # Calculate conditioning features from the spectrograms generated by the previous tiers.
@@ -239,13 +238,13 @@ class Tier(nn.Module):
         conditioning = conditioning[:, :, :FRAMES]
 
         # Hidden states of layer zero for time-delayed and frequency-delayed stack
-        h_t, h_f, _ = self.layers[0](spectrogram, conditioning)
+        h_t, h_f = self.layers[0](spectrogram, conditioning)
 
         # Hidden states of every layer for time-delayed and frequency-delayed.
         # Shapes of hidden states are always:
         # - Time-delayed stack and Frequency-delayed stack: [B, FREQ, FRAMES, HIDDEN_SIZE]
         for layer_idx in range(1, self.n_layers):
-            h_t, h_f, _ = self.layers[layer_idx](h_t, h_f, None)
+            h_t, h_f = self.layers[layer_idx](h_t, h_f)
 
         # At final layer, a linear transformation is applied to the output of the frequency-delayed
         # stack to produce the unconstrained parameters according to MelNet formula (10)
