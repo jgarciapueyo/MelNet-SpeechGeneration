@@ -23,7 +23,12 @@ from src.data import collatedata, librispeech, ljspeech, podcast
 from src.dataprocessing import transforms
 from src.dataprocessing import audio_normalizing
 from src.model.GMM import GMMLoss
-from src.model.Tier import Tier1, Tier
+# this module implements the basic functionality of tiers. (The TierCheckpoint module should be
+# favored over this one)
+# from src.model.Tier import Tier1, Tier
+# this module implements the functionality of tiers adding PyTorch checkpointing allowing for tiers
+# with bigger hidden size
+from src.model.TierCheckpoint import Tier1, Tier
 from src.utils import tierutil
 from src.utils.eval import evaluation
 from src.utils.hparams import HParams

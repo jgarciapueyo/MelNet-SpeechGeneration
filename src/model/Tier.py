@@ -76,11 +76,13 @@ class Tier1(nn.Module):
 
         # Define layers of the tier
         self.layers = nn.ModuleList(
-            [DelayedStackLayer0(hidden_size=hidden_size,
+            [DelayedStackLayer0(tier=tier,
+                                hidden_size=hidden_size,
                                 has_central_stack=self.has_central_stack,
                                 freq=freq)]
             +
-            [DelayedStackLayer(layer=layer_idx,
+            [DelayedStackLayer(tier=tier,
+                               layer=layer_idx,
                                hidden_size=hidden_size,
                                has_central_stack=self.has_central_stack,
                                freq=freq)
@@ -179,13 +181,15 @@ class Tier(nn.Module):
 
         # Define layers of the tier
         self.layers = nn.ModuleList(
-            [DelayedStackLayer0(hidden_size=hidden_size,
+            [DelayedStackLayer0(tier=tier,
+                                hidden_size=hidden_size,
                                 has_central_stack=self.has_central_stack,
                                 freq=freq,
                                 is_conditioned=True,
                                 hidden_size_condition=hidden_size * 4)]
             +
-            [DelayedStackLayer(layer=layer_idx,
+            [DelayedStackLayer(tier=tier,
+                               layer=layer_idx,
                                hidden_size=hidden_size,
                                has_central_stack=self.has_central_stack,
                                freq=freq)

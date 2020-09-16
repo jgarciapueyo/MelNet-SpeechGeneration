@@ -52,7 +52,7 @@ class DelayedStackLayer0(nn.Module):
         >> h_t, h_f, h_c = l_0(spectrogram)
     """
 
-    def __init__(self, hidden_size: int, has_central_stack: bool, freq: int,
+    def __init__(self, tier: int, hidden_size: int, has_central_stack: bool, freq: int,
                  is_conditioned: bool = False, hidden_size_condition: int = None):
         """
         Args:
@@ -201,7 +201,7 @@ class DelayedStackLayer(nn.Module):
         >>     h_t, h_f, h_c = layer(h_t, h_f, h_c)
     """
 
-    def __init__(self, layer: int, hidden_size: int, has_central_stack: bool, freq: int):
+    def __init__(self, tier: int, layer: int, hidden_size: int, has_central_stack: bool, freq: int):
         """
         Args:
             layer (int): the layer that this module represents.
@@ -231,33 +231,33 @@ class DelayedStackLayer(nn.Module):
                                             hidden_size=hidden_size,
                                             num_layers=1,
                                             batch_first=True)
-        # Initial values of recurrent states (are trainable parameters as stated in Table 1)
-        # self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
-        #                                             requires_grad=True)
-        # self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
-        #                                           requires_grad=True)
-        # self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
-        #                                             requires_grad=True)
-        # self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
-        #                                           requires_grad=True)
-        # self.hidden_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-        #                                             requires_grad=True)
-        # self.cell_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-        #                                           requires_grad=True)
-        # self.hidden_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-        #                                              requires_grad=True)
-        # self.cell_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
-        #                                            requires_grad=True)
-        # self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
-        #                                             requires_grad=True)
-        # self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, freq, hidden_size),
-        #                                           requires_grad=True)
-        self.hidden_state_forwardtime = torch.zeros(1, 1, hidden_size, device="cuda")
-        self.cell_state_forwardtime = torch.zeros(1, 1, hidden_size, device="cuda")
-        self.hidden_state_forwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
-        self.cell_state_forwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
-        self.hidden_state_backwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
-        self.cell_state_backwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+
+        # This conditional controls if the initial values of the recurrent states for the
+        # Time-Delayed Stack are trainable parameters or not. The way to control this is to manually
+        # specify the tier from which the initial values of the recurrent states are trainable
+        # parameters.
+        if tier >= -1:
+            # Initial values of recurrent states (are trainable parameters as stated in Table 1)
+            self.hidden_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                         requires_grad=True)
+            self.cell_state_forwardtime = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                       requires_grad=True)
+            self.hidden_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                         requires_grad=True)
+            self.cell_state_forwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                       requires_grad=True)
+            self.hidden_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                         requires_grad=True)
+            self.cell_state_backwardfreq = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                       requires_grad=True)
+        else:
+            # Initial values of recurrent states are NOT trainable parameters
+            self.hidden_state_forwardtime = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.cell_state_forwardtime = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.hidden_state_forwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.cell_state_forwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.hidden_state_backwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.cell_state_backwardfreq = torch.zeros(1, 1, hidden_size, device="cuda")
 
         # in_features=hidden_size*3 because in_features is the concatenation of the
         # three RNN hidden states
@@ -269,11 +269,18 @@ class DelayedStackLayer(nn.Module):
                                hidden_size=hidden_size,
                                num_layers=1,
                                batch_first=True)
-        # Initial values of recurrent states (are trainable parameters as stated in Table 1)
-        # self.hidden_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
-        # self.cell_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
-        self.hidden_state_freq = torch.zeros(1, 1, hidden_size, device="cuda")
-        self.cell_state_freq = torch.zeros(1, 1, hidden_size, device="cuda")
+        # This conditional controls if the initial values of the recurrent states for the
+        # Frequency-Delayed Stack are trainable parameters or not. The way to control this is to
+        # manually specify the tier from which the initial values of the recurrent states are
+        # trainable parameters.
+        if tier >= -1:
+            # Initial values of recurrent states (are trainable parameters as stated in Table 1)
+            self.hidden_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
+            self.cell_state_freq = nn.Parameter(torch.zeros(1, 1, hidden_size), requires_grad=True)
+        else:
+            # Initial values of recurrent states are NOT trainable parameters
+            self.hidden_state_freq = torch.zeros(1, 1, hidden_size, device="cuda")
+            self.cell_state_freq = torch.zeros(1, 1, hidden_size, device="cuda")
 
         self.W_f_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
 
@@ -283,13 +290,20 @@ class DelayedStackLayer(nn.Module):
                                    hidden_size=hidden_size,
                                    num_layers=1,
                                    batch_first=True)
-            # Initial values of recurrent states (are trainable parameters as stated in Table 1)
-            # self.hidden_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
-            #                                         requires_grad=True)
-            # self.cell_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
-            #                                       requires_grad=True)
-            self.hidden_state_central = torch.zeros(1, 1, hidden_size, device="cuda")
-            self.cell_state_central = torch.zeros(1, 1, hidden_size, device="cuda")
+            # This conditional controls if the initial values of the recurrent states for the
+            # Centralized Stack are trainable parameters or not. The way to control this is to
+            # manually specify the tier from which the initial values of the recurrent states are
+            # trainable parameters.
+            if tier >= -1:
+                # Initial values of recurrent states (are trainable parameters as stated in Table 1)
+                self.hidden_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                        requires_grad=True)
+                self.cell_state_central = nn.Parameter(torch.zeros(1, 1, hidden_size),
+                                                      requires_grad=True)
+            else:
+                # Initial values of recurrent states are NOT trainable parameters
+                self.hidden_state_central = torch.zeros(1, 1, hidden_size, device="cuda")
+                self.cell_state_central = torch.zeros(1, 1, hidden_size, device="cuda")
 
             self.W_c_l = nn.Linear(in_features=hidden_size, out_features=hidden_size)
 

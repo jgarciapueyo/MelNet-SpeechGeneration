@@ -1,3 +1,20 @@
+"""
+Main entry point to synthesize a melspectrogram
+
+Usage:
+    python synthesis.py [-h] -p PATH_CONFIG -s PATH_SYNTHESIS [-t TIMESTEPS]
+
+This module generates spectrograms.
+See README.md and models/params/README.md for more information about the configurations file.
+PATH_CONFIG must be a single file defining a single model and PATH_SYNTHESIS must be a single file
+defining the path to the weights of the model being used do synthesis. Both files must correspond to
+a model with the same architecture (number of tiers, number of layers in each tier, hidden_size,
+...).
+
+TIMESTEPS is the number of frames of the spectrogram to generate. It can also be seen as the length
+of the spectrogram.
+"""
+
 import argparse
 from pathlib import Path
 import os

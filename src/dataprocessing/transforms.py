@@ -99,8 +99,6 @@ def spectrogram_to_melspectrogram(spectrogram: Tensor, hp: HParams) -> Tensor:
         "Dimensions of spectrogram should be 3: [B, FREQ, FRAMES], but found {}".format(
             len(spectrogram.size()))
 
-    # FIXME: should MelScale only be applied to power spectrogram (and not to a linear one)?
-    #  Ask for an answer
     melscale = torchaudio.transforms.MelScale(n_mels=hp.audio.mel_channels,
                                               sample_rate=hp.audio.sample_rate).to(hp.device)
     return melscale(spectrogram)
@@ -262,7 +260,7 @@ def plot_spectrogram(spectrogram: Tensor, hp: HParams) -> None:
     fig = plt.figure()
     for i in range(0, n_spectrograms):
         fig.add_subplot(n_spectrograms, 1, i + 1)
-        plt.imshow(spectrogram[i].detach().to('cpu'), origin='lower')
+        plt.imshow(spectrogram[i].detach().to('cpu'), origin='lower', interpolation="none")
         plt.axis('off')
     plt.show()
 
@@ -286,7 +284,7 @@ def plot_melspectrogram(melspectrogram: Tensor, hp: HParams) -> None:
     fig = plt.figure()
     for i in range(0, n_melspectrograms):
         fig.add_subplot(n_melspectrograms, 1, i + 1)
-        plt.imshow(melspectrogram[i], origin='lower')
+        plt.imshow(melspectrogram[i], origin='lower', interpolation="none")
         plt.axis('off')
     plt.show()
 
@@ -308,7 +306,7 @@ def save_spectrogram(filepath: str, spectrogram: Tensor, hp: HParams) -> None:
     fig = plt.figure()
     for i in range(0, n_spectrograms):
         fig.add_subplot(n_spectrograms, 1, i + 1)
-        plt.imshow(spectrogram[i].detach().to('cpu'), origin='lower')
+        plt.imshow(spectrogram[i].detach().to('cpu'), origin='lower', interpolation="none")
         plt.axis('off')
 
     fig.savefig(fname=filepath)

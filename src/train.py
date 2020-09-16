@@ -1,3 +1,25 @@
+"""
+Main entry point to train a model
+
+Usage:
+   python train.py [-h] -p PATH_CONFIG [--tier TIER] [--checkpoint-path CHECKPOINT_PATH]
+
+This module trains a model or several models, and every model is composed of tiers.
+See README.md and models/params/README.md for more information about the configuration file.
+If PATH_CONFIG is a single file, it defines a single model and a single model will be trained.
+If PATH_CONFIG is a folder, it can contain several files and various models will be trained (one for
+    every file in the folder PATH_CONFIG).
+
+If you want to train only one tier of the model, the flag --tier can be used.
+If PATH_CONFIG is a single file, then the specified tier of that model will be trained.
+If PATH_CONFIG is a folder, then the specified tier for various models will be trained.
+
+Only the training of a single tier of a single model can be RESUMED. This means that if
+CHECKPOINT_PATH is a file (weights of a tier), then PATH_CONFIG must point to a single file
+(the parameters of the weight file and the configuration file must be the same) and TIER must define
+the tier for which training is going to be resumed.
+"""
+
 import argparse
 from pathlib import Path
 import os
@@ -5,7 +27,12 @@ import sys
 
 sys.path.insert(0, os.getcwd())
 
+# this module implements the basic training. (The training_batch module should be favored over this
+# one)
+# from src.utils.training import setup_training
+# this module implements the training using gradient accumulation to train in bigger batches
 from src.utils.training_batch import setup_training
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

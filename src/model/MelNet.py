@@ -98,7 +98,7 @@ class MelNet(nn.Module):
                                                           n_tiers=self.n_tiers,
                                                           tier=1))]
             +
-            [Tier(tier=tier_idx,
+            [Tier(tier=tier_idx+1,
                   n_layers=layers[tier_idx],
                   hidden_size=hidden_size,
                   gmm_size=gmm_size,

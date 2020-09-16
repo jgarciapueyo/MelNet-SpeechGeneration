@@ -19,8 +19,12 @@ import torch
 
 from src.dataprocessing import transforms as T
 from src.dataprocessing.audio_normalizing import preprocessing, postprocessing
+# this module implements the normal MelNet generation procedure
 from src.model.MelNet import MelNet
-#from src.model.MelNetUpsampling import MelNet
+# this module implements the MelNet generation procedure where the output of the first tier is
+# a low-resolution spectrogram from the dataset (to isolate and test the effect of Upsampling Layers
+# only). It should be used only in that case.
+# from src.model.MelNetUpsampling import MelNet
 from src.utils.hparams import HParams
 from src.utils.logging import TensorboardWriter
 

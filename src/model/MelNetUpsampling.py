@@ -156,9 +156,22 @@ class MelNet(nn.Module):
         from src.dataprocessing import transforms as T
         from src.dataprocessing.audio_normalizing import preprocessing
         dataloader, _, _ = get_dataloader(hp)
-        dataiter = iter(dataloader)
-        waveform, utterance = dataiter.next()
-        waveform = waveform.to(device=hp.device, non_blocking=True)
+
+        wave = None
+        for i, (waveform, utterance) in enumerate(dataloader):
+            if "building" in utterance[0]:
+                print(utterance[0])
+            if utterance[0] == "One building, Market Hall, was unavailable for November 22.":
+                wave = waveform
+                break
+
+        if wave is None:
+            logger.info("wave not found")
+            return
+
+        #dataiter = iter(dataloader)
+        #wave, utterance = dataiter.next()
+        waveform = wave.to(device=hp.device, non_blocking=True)
         spectrogram = T.wave_to_melspectrogram(waveform, hp)
         spectrogram = preprocessing(spectrogram, hp)
 
@@ -189,6 +202,8 @@ class MelNet(nn.Module):
             print("Shape of spectrogram_prev_tier (x): ", x.size())
             print("Freq_of_tierX: ", freq_of_tierX)
             print("Length_of_tierX: ", length_of_tierX)
+            length_of_tierX = min(length_of_tierX, x.size(2))
+            x = x[:, :, :length_of_tierX]
             for i in range(0, length_of_tierX):
                 logger.info(f"Tier {tier_idx}/{self.n_tiers} - Frame {i}/{length_of_tierX}")
                 if temp_x is None:

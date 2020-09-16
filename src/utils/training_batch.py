@@ -30,6 +30,11 @@ from src.data import collatedata, librispeech, ljspeech, podcast
 from src.dataprocessing import transforms
 from src.dataprocessing import audio_normalizing
 from src.model.GMM import GMMLoss
+# this module implements the basic functionality of tiers. (The TierCheckpoint module should be
+# favored over this one)
+# from src.model.Tier import Tier1, Tier
+# this module implements the functionality of tiers adding PyTorch checkpointing allowing for tiers
+# with bigger hidden size
 from src.model.TierCheckpoint import Tier1, Tier
 from src.utils import tierutil
 # from src.utils import gpumemory
@@ -37,6 +42,13 @@ from src.utils.eval import evaluation
 from src.utils.hparams import HParams
 from src.utils.logging import TensorboardWriter
 
+
+def gradient_norm(model):
+    total_norm = 0
+    for p in model.parameters():
+        param_norm = p.grad.data.norm(2)
+        total_norm += param_norm.item()
+    return total_norm ** (1. / 2)
 
 def get_dataloader(hp: HParams) \
         -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, int]:
@@ -55,7 +67,7 @@ def get_dataloader(hp: HParams) \
                                   audio_folder=hp.data.audio_folder,
                                   text_file=hp.data.text_file)
         length = len(dataset)
-        train_length = int(0.9 * length)
+        train_length = int(0.95 * length)
         train_data, test_data = torch.utils.data.random_split(dataset, [train_length,
                                                                         length - train_length])
 
@@ -72,13 +84,13 @@ def get_dataloader(hp: HParams) \
                                                       num_workers=hp.training.num_workers,
                                                       collate_fn=collatedata.AudioCollatePodcast(),
                                                       pin_memory=True)
-        return train_dataloader, test_dataloader, int(0.9 * length)
+        return train_dataloader, test_dataloader, int(0.95 * length)
 
     elif hp.data.dataset == "librispeech":
         Path(hp.data.path).mkdir(parents=True, exist_ok=True)
         dataset = librispeech.download_data(root=hp.data.path, url=hp.data.url)
         length = len(dataset)
-        train_length = int(0.9 * length)
+        train_length = int(0.95 * length)
         train_data, test_data = torch.utils.data.random_split(dataset, [train_length,
                                                                         length - train_length])
 
@@ -95,13 +107,13 @@ def get_dataloader(hp: HParams) \
                                                       num_workers=hp.training.num_workers,
                                                       collate_fn=collatedata.AudioCollatePodcast(),
                                                       pin_memory=True)
-        return train_dataloader, test_dataloader, int(0.9 * length)
+        return train_dataloader, test_dataloader, int(0.95 * length)
 
     elif hp.data.dataset == "ljspeech":
         Path(hp.data.path).mkdir(parents=True, exist_ok=True)
         dataset = ljspeech.download_data(root=hp.data.path)
         length = len(dataset)
-        train_length = int(0.9 * length)
+        train_length = int(0.95 * length)
         train_data, test_data = torch.utils.data.random_split(dataset, [train_length,
                                                                         length - train_length])
 
@@ -118,7 +130,7 @@ def get_dataloader(hp: HParams) \
                                                       num_workers=hp.training.num_workers,
                                                       collate_fn=collatedata.AudioCollatePodcast(),
                                                       pin_memory=True)
-        return train_dataloader, test_dataloader, int(0.9 * length)
+        return train_dataloader, test_dataloader, int(0.95 * length)
 
     else:
         raise Exception(f"Dataset {hp.data.dataset} does not exist")
@@ -159,7 +171,7 @@ def resume_training(args: argparse.Namespace, hp: HParams, tier: int, model: Tie
 
     if hp_chkpt.network != hp.network:
         logger.error("New params for network structure are different from checkpoint.")
-        raise Exception("New params for network structure are different from checkpoint.")
+        # raise Exception("New params for network structure are different from checkpoint.")
 
     if checkpoint["tier_idx"] != tier:
         logger.error(
@@ -228,10 +240,11 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
                      freq=tier_freq)
     model = model.to(hp.device)
     model.train()
+    parameters = model.parameters()
 
     # Setup loss criterion and optimizer
     criterion = GMMLoss()
-    optimizer = torch.optim.RMSprop(params=model.parameters(),
+    optimizer = torch.optim.RMSprop(params=parameters,
                                     lr=hp.training.lr,
                                     momentum=hp.training.momentum)
 
@@ -248,6 +261,8 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
     loss_save = 0  # accumulated loss between saving iterations
     prev_loss_onesample = 1e8  # used to compare between saving iterations and decide whether or not
     # to save the model
+
+    gradients = []
 
     for epoch in range(hp.training.epochs):
         logger.info(f"Epoch: {epoch}/{hp.training.epochs} - Starting")
@@ -297,6 +312,12 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
             # same as in the paper)
             if (total_iterations + 1) % (
                     hp.training.accumulation_steps / hp.training.batch_size) == 0:
+
+                gradients.append(gradient_norm(model))
+                avg_gradient = sum(gradients) / len(gradients)
+                logger.info(f"Gradient norm: {gradients[-1]} - "
+                            f"Avg gradient: {avg_gradient}")
+                torch.nn.utils.clip_grad_norm_(parameters, 2200)
                 optimizer.step()
                 model.zero_grad()
 
@@ -308,10 +329,10 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
             # 6.1 Save model (if is better than previous tier)
             if (total_iterations + 1) % hp.training.save_iterations == 0:
                 # Calculate average loss of one sample of a batch
-                loss_onesample = int(loss_save / hp.training.save_iterations)
+                loss_onesample = loss_save / hp.training.save_iterations
                 # if loss_onesample of these iterations is lower, the tier is better and we save it
-                if loss_onesample < prev_loss_onesample:
-                    path = f"{hp.training.dir_chkpt}/tier{tier}_{timestamp}_loss{loss_onesample}.pt"
+                if loss_onesample <= prev_loss_onesample:
+                    path = f"{hp.training.dir_chkpt}/tier{tier}_{timestamp}_loss{loss_onesample:.2f}.pt"
                     torch.save(obj={'dataset': hp.data.dataset,
                                     'tier_idx': tier,
                                     'hp': hp,
@@ -327,11 +348,11 @@ def train_tier(args: argparse.Namespace, hp: HParams, tier: int, extension_archi
             # 6.2 Logging
             if (total_iterations + 1) % hp.logging.log_iterations == 0:
                 # Calculate average loss of one sample of a batch
-                loss_onesample = int(loss_logging / hp.logging.log_iterations)
+                loss_onesample = loss_logging / hp.logging.log_iterations
                 tensorboardwriter.log_training(hp, loss_onesample, total_iterations)
                 logger.info(f"Epoch: {epoch}/{hp.training.epochs} - "
                             f"Iteration: {i * hp.training.batch_size}/{num_samples} - "
-                            f"Loss: {loss_onesample}")
+                            f"Loss: {loss_onesample:.4f}")
                 loss_logging = 0
 
             # 6.3 Evaluate
