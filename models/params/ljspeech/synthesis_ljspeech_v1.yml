@@ -5,12 +5,12 @@ name: 'synthesis_ljspeech_v1'
 #           synthesis. The tiers have to be ordered, from the first tier of the model being the
 #           first element in the list to the last tier of the model being the last item in the list
 checkpoints_path: [
-  "models/chkpt/dljspeech_v1_t6_l12.5.4.3.2.2_hd200_gmm10/tier1_20200806-132637_final.pt",  # First tier
-  #"models/chkpt/dljspeech_v1_t6_l12.5.4.3.2.2_hd200_gmm10/tier2_20200806-233752_epoch1_final.pt",
-  #"models/chkpt/dljspeech_v1_t6_l12.5.4.3.2.2_hd200_gmm10/tier3_20200806-233752_epoch1_final.pt",
-  #"models/chkpt/dljspeech_v1_t6_l12.5.4.3.2.2_hd200_gmm10/tier4_20200806-233752_epoch1_final.pt",
-  #"models/chkpt/dljspeech_v1_t6_l12.5.4.3.2.2_hd200_gmm10/tier5_20200806-233752_epoch1_final.pt",
-  #"models/chkpt/dljspeech_v1_t6_l12.5.4.3.2.2_hd200_gmm10/tier6_20200806-233752_epoch1_final.pt",
+  "models/chkpt/dljspeech_v3_t6_l16.7.6.5.4.4_hd200_gmm16/tier1_20200815-235001_epoch1_final.pt",  # First tier
+  "models/chkpt/dljspeech_v3_t6_l16.7.6.5.4.4_hd200_gmm16/tier2_20200815-003047_epoch1_final.pt",
+  "models/chkpt/dljspeech_v3_t6_l16.7.6.5.4.4_hd200_gmm16/tier3_20200815-003047_epoch1_final.pt",
+  "models/chkpt/dljspeech_v3_t6_l16.7.6.5.4.4_hd200_gmm16/tier4_20200815-003047_epoch1_final.pt",
+  "models/chkpt/dljspeech_v3_t6_l16.7.6.5.4.4_hd200_gmm16/tier5_20200815-003047_epoch1_final.pt",
+  "models/chkpt/dljspeech_v3_t6_l16.7.6.5.4.4_hd200_gmm16/tier6_20200815-003047_epoch1_final.pt"
 ]
 
 # (str): path to save the results of synthesis

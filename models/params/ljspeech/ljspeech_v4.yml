@@ -2,7 +2,7 @@
 # podcast dataset
 
 # (str) identifies the model to be trained and its parameters
-name: 'ljspeech_v2'
+name: 'ljspeech_v3'
 
 # Parameters related with the data pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
@@ -27,10 +27,10 @@ audio:
 # Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
 # See MelNet paper Table 1.
 network:
-  n_tiers: 5
-  layers: [16,6,5,4,4]
+  n_tiers: 6
+  layers: [16,7,6,5,4,4]
   hidden_size: 200
-  gmm_size: 10
+  gmm_size: 16
 
 # Information related to the folder where the data for training is found and additional information
 # depending on the dataset being used.
@@ -44,7 +44,7 @@ training:
   epochs: 2
   batch_size: 1
   accumulation_steps: 16
-  lr: 0.000003
+  lr: 0.0000040
   # lr: 0.00010
   momentum: 0.9
   # (int) number of workers for loading the data

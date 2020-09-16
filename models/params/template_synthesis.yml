@@ -1,0 +1,21 @@
+# The synthesis YAML file contains information needed to generate new spectrograms:
+# - information about the path of the weights of the tiers being used
+# - information about the path used to store the output
+
+# (str) identifies the file to do synthesis
+name: 'template_synthesis'
+
+# (List[str]) path from project directory to the weights of the tiers of the model to perform
+#           synthesis. The tiers have to be ordered, from the first tier of the model being the
+#           first element in the list to the last tier of the model being the last item in the list
+checkpoints_path: [
+  "models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier1_20200101-000000.pt",  # First tier
+  "models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier2_20200101-000000.pt",  # Second tier
+  "models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier3_20200101-000000.pt",  # Third tier
+  "models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier4_20200101-000000.pt",  # Fourth tier
+  "models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier5_20200101-000000.pt",  # Fifth tier
+  "models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier6_20200101-000000.pt",  # Sixth tier
+]
+
+# (str): path to save the results of synthesis
+output_path: "out/"

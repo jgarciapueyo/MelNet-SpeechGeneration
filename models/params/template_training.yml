@@ -1,14 +1,21 @@
-# This file contains the parameters for trying training in the server with a medium model with
-# podcast dataset
+# The training YAML file contains information needed to train the model:
+# - information about the dataset and how to transform the audio to melspectrograms,
+# - information about the architecture of the network (n_tiers, layers of each tier, ...),
+# - information about the dataset (name, path to the dataset, ...)
+# - information about the training (optimizer, epochs, ...)
+# - information about logging the training
+
+# [DESCRIPTION OF THE MODEL ARCHITECTURE: i.e. this model is a simple model to check that everything
+# works]
 
 # (str) identifies the model to be trained and its parameters
-name: 'ljspeech_v2'
+name: 'template_model'
 
-# Parameters related with the data pipeline (transforms between different audio representations like
+# Parameters related with the datasets pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
 audio:
   # (int): sample rate of the sample audio in Hz
-  sample_rate: 22050
+  sample_rate: 16000
   # (str) type of spectrogram it will represent: 'linear' for energy, 'power' for power
   spectrogram_type: 'power'
   # (int) size of the Fast Fourier Transform
@@ -20,39 +27,45 @@ audio:
   # (int) window size
   win_length: 1536  # 6 * 256
   # (int) reference level (in dB) in spectrogram
-  ref_level_db: 30
+  ref_level_db: 20
   # (int) minimum level (in dB) in spectrogram
   min_level_db: -100
 
 # Parameters related with the structure of the network (n_tiers, layers of each tier, ...).
-# See MelNet paper Table 1.
 network:
-  n_tiers: 5
-  layers: [16,6,5,4,4]
-  hidden_size: 200
+  # (int)
+  n_tiers: 6
+  # (List[int])
+  layers: [12,5,4,3,2,2]
+  # (int)
+  hidden_size: 512
+  # (int)
   gmm_size: 10
 
-# Information related to the folder where the data for training is found and additional information
+# Information related to the folder where the datasets for training is found and additional information
 # depending on the dataset being used.
+# NOTE: The fields required change depending on the dataset being used
 data:
-  dataset: 'ljspeech'
-  path: 'datasets/ljspeech/'
+  dataset: 'librispeech'
+  path: "datasets/librispeech/"
+  url: "dev-clean"
 
 # Parameters related with the training phase (optimizer, learning rate, ...)
 training:
+  # (str)
   optimizer: 'RMSProp'
+  # (int)
   epochs: 2
+  # (int)
   batch_size: 1
-  accumulation_steps: 16
-  lr: 0.000003
-  # lr: 0.00010
+  # (float)
+  lr: 0.0010
+  # (float)
   momentum: 0.9
-  # (int) number of workers for loading the data
+  # (int) number of workers for loading the datasets
   num_workers: 1
   # (int) iterations between model save
-  save_iterations: 1000
-  # (int) iterations between evaluation
-  evaluation_iterations: 1040  # so it is multiple of accumulation steps / batch_size
+  save_iterations: 40
   # (str) path where to save model weights
   dir_chkpt: 'models/chkpt/'
 
@@ -64,4 +77,4 @@ logging:
   # (str) path where to save other logs
   dir_log: 'logs/general/'
   # (int) iterations between logs
-  log_iterations: 50
+  log_iterations: 1

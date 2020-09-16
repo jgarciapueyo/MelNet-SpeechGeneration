@@ -6,39 +6,39 @@ clean-pyc:
 	find . -name '*.pyo' -exec rm --force {} +
 	name '*~' -exec rm --force  {}
 
+# builds the container where to perform training and synthesis
+build-container:
+	docker build -f utils/docker/Dockerfile -t melnet .
+
+# runs the docker container where to perform training and synthesis
+run-container:
+	bash utils/docker/melnet-run-container.sh
+
 # starts the program to download the librispeech dataset to MelNet-SpeechGeneration/data/
 data-librispeech:
 	python src/data/librispeech.py -r datasets/librispeech
 
+# starts the program to download the ljspeech dataset to MelNet-SpeechGeneration/data/
 data-ljspeech:
 	python src/data/ljspeech.py -r datasets/ljspeech
 
-# starts training on small MelNet model to test locally if training runs correctly
-dummy-train:
-	python src/train.py -p models/params/podcast/dummymodel_podcast.yml
+# starts training a MelNet model
+train-template:
+	python src/train.py -p models/params/template_training.yml
+	# If we wanted to train only the second tier of that model:
+	# python src/train.py -p models/params/template_training.yml --tier 2
+	# If we wanted to resume training of second tier from a checkpoint:
+	# python src/train.py -p models/params/template_training.yml --tier 2 --checkpoint-path models/chkpt/ddataset_t6_l12.5.4.3.2.2_hd512_gmm10/tier2_20200101-000000.pt
 
-# starts training on MelNet declared in yaml file (intended to use in when training real model)
-train:
-	#python src/train.py -p models/params/podcast/podcast_v3.yml --tier 2
-	python src/train.py -p models/params/ljspeech/ljspeech_v1.yml --tier 4
-
-# performs synthesis
-synthesis:
-	#python src/synthesis.py -p models/params/librispeech/librispeech_v2.yml -s models/params/librispeech/synthesis_librispeech_v2.yml -t300
-	python src/synthesis.py -p models/params/ljspeech/ljspeech_v1.yml -s models/params/ljspeech/synthesis_ljspeech_v1.yml -t200
+# performs synthesis and generates spectrogram
+synthesis-template:
+	python src/synthesis.py -p models/params/template_training.yml -s models/params/template_synthesis.yml -t 200
 
 # sends the current project to the server (use from local computer)
+# TODO: add README in utils/ssh
 send:
 	bash -x utils/ssh/send.sh
 
 # receives the logs, weights and outputs from server (use from local computer)
 receive:
 	bash -x utils/ssh/receive.sh
-
-# builds the container where to perform training and synthesis
-build-container:
-	docker build -f utils/docker/Dockerfile -t jgarciapueyo/melnet .
-
-# runs the docker container where to perform training and synthesis
-run-container:
-	bash utils/docker/melnet-run-container.sh

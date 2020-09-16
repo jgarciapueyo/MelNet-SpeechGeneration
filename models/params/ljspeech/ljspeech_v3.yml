@@ -2,7 +2,7 @@
 # podcast dataset
 
 # (str) identifies the model to be trained and its parameters
-name: 'ljspeech_v2'
+name: 'ljspeech_v3'
 
 # Parameters related with the data pipeline (transforms between different audio representations like
 # audio waveform, spectrogram, melspectrogram, ...).
@@ -44,7 +44,7 @@ training:
   epochs: 2
   batch_size: 1
   accumulation_steps: 16
-  lr: 0.000003
+  lr: 0.000006
   # lr: 0.00010
   momentum: 0.9
   # (int) number of workers for loading the data

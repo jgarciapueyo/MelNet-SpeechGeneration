@@ -20,7 +20,7 @@ audio:
   # (int) window size
   win_length: 1536  # 6 * 256
   # (int) reference level (in dB) in spectrogram
-  ref_level_db: 30
+  ref_level_db: 20
   # (int) minimum level (in dB) in spectrogram
   min_level_db: -100
 
@@ -44,7 +44,7 @@ training:
   epochs: 2
   batch_size: 1
   accumulation_steps: 8
-  lr: 0.0000030
+  lr: 0.000010
   momentum: 0.9
   # (int) number of workers for loading the data
   num_workers: 1
